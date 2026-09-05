@@ -1,0 +1,7 @@
+{
+  "name": "bleuolingo",
+  "description": "A playful, modern blue-themed spaced repetition flashcard app for language learning with spreadsheet import and Anki-style scheduling.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
