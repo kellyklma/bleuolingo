@@ -20,7 +20,16 @@ export async function fetchUserCardsFirestore(uid: string): Promise<Flashcard[] 
 export async function saveUserCardsFirestore(uid: string, cards: Flashcard[]): Promise<void> {
   try {
     const cardDocRef = doc(db, 'users', uid, 'data', 'cards');
-    await setDoc(cardDocRef, { list: cards, updatedAt: Date.now() }, { merge: true });
+    
+    // Strips out any key with an 'undefined' value so Firestore accepts the payload
+    const sanitizedCards = JSON.parse(JSON.stringify(cards));
+
+    await setDoc(cardDocRef, { 
+      list: sanitizedCards, 
+      updatedAt: Date.now() 
+    }, { merge: true });
+    
+    console.log('Cards successfully saved to Firestore!');
   } catch (err) {
     console.error('Failed to save cards to Firestore:', err);
   }
@@ -53,7 +62,12 @@ export async function recordReviewActivityFirestore(
 
   try {
     const activityDocRef = doc(db, 'users', uid, 'data', 'activity');
-    await setDoc(activityDocRef, { log: updatedLog, updatedAt: Date.now() }, { merge: true });
+    const sanitizedLog = JSON.parse(JSON.stringify(updatedLog));
+
+    await setDoc(activityDocRef, { 
+      log: sanitizedLog, 
+      updatedAt: Date.now() 
+    }, { merge: true });
   } catch (err) {
     console.error('Failed to save activity to Firestore:', err);
   }
