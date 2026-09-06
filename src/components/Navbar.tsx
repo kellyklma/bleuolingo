@@ -1,6 +1,7 @@
 import React from 'react';
-import { Volume2, VolumeX, Layers, RotateCcw } from 'lucide-react';
+import { Volume2, VolumeX, Layers, RotateCcw, LogIn, LogOut } from 'lucide-react';
 import { BleuoMascot } from './BleuoMascot';
+import { User } from 'firebase/auth';
 
 interface NavbarProps {
   autoAudio: boolean;
@@ -9,6 +10,9 @@ interface NavbarProps {
   onResetSession: () => void;
   sessionReviewedCount: number;
   totalCards: number;
+  currentUser?: User | null;
+  onLogin?: () => void;
+  onLogout?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -18,6 +22,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onResetSession,
   sessionReviewedCount,
   totalCards,
+  currentUser,
+  onLogin,
+  onLogout,
 }) => {
   return (
     <header
@@ -71,6 +78,40 @@ export const Navbar: React.FC<NavbarProps> = ({
               className="w-10 h-10 rounded-2xl border-2 border-slate-200 hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-all flex items-center justify-center cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Google Auth Sign In / Out Button */}
+          {currentUser ? (
+            <button
+              id="auth-logout-btn"
+              type="button"
+              onClick={onLogout}
+              className="h-10 px-3 rounded-2xl border-2 border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-extrabold flex items-center gap-2 active:scale-95 cursor-pointer transition-all"
+              title={`Signed in as ${currentUser.displayName || currentUser.email}`}
+            >
+              {currentUser.photoURL ? (
+                <img
+                  src={currentUser.photoURL}
+                  alt="Avatar"
+                  className="w-5 h-5 rounded-full border border-slate-200"
+                />
+              ) : (
+                <LogOut className="w-4 h-4 text-slate-500" />
+              )}
+              <span className="hidden sm:inline">
+                {currentUser.displayName?.split(' ')[0] || 'Sign Out'}
+              </span>
+            </button>
+          ) : (
+            <button
+              id="auth-login-btn"
+              type="button"
+              onClick={onLogin}
+              className="h-10 px-3.5 rounded-2xl bg-blue-500 hover:bg-blue-600 text-white font-extrabold text-xs transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer shadow-xs"
+            >
+              <LogIn className="w-4 h-4" />
+              <span>Sign In</span>
             </button>
           )}
         </div>

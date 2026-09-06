@@ -21,6 +21,9 @@ import {
   lowercaseCard,
 } from './lib/userStorage';
 import { loadActivityLog, recordReviewActivity, ActivityLog } from './lib/activityStorage';
+import { User } from 'firebase/auth';
+import { subscribeToAuth, loginWithGoogle, logout } from './lib/auth';
+import { LogIn, LogOut } from 'lucide-react';
 import { Sparkles, ArrowLeftRight, Volume2, VolumeX, Menu, X } from 'lucide-react';
 
 const AUTOPLAY_DISPLAY_KEY = 'bleuolingo_autoplay_display_v1';
@@ -388,6 +391,15 @@ export default function App() {
     });
   };
 
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToAuth((user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
+
   return (
     <div
       id="app-root-layout"
@@ -443,6 +455,9 @@ export default function App() {
           onRenameUser={handleRenameUser}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={toggleSidebarCollapse}
+          currentUser={currentUser}
+          onLogin={loginWithGoogle}
+          onLogout={logout}
         />
       </div>
 
@@ -476,8 +491,8 @@ export default function App() {
                   onClick={handleToggleSwitchSides}
                   title={isSidesSwapped ? 'Reverse Mode: Active' : 'Reverse Mode: Inactive'}
                   className={`h-9 px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${isSidesSwapped
-                      ? 'bg-blue-500 border-blue-600 text-white shadow-xs'
-                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-2xs'
+                    ? 'bg-blue-500 border-blue-600 text-white shadow-xs'
+                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-2xs'
                     }`}
                 >
                   <ArrowLeftRight className="w-3.5 h-3.5" />
