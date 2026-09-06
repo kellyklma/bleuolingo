@@ -6,7 +6,7 @@ export interface Flashcard {
   id: string;
   front: string; // Target language word or phrase
   back: string; // Meaning / translation
-  tags?: string[]; // Tags or hierarchical categories separated by '::'
+  tags?: string[]; // Tags or hierarchical categories separated by ';'
   example?: string; // Example sentence in target language
   exampleTranslation?: string; // Example sentence translated
   targetWord?: string; // Original vocabulary word used to generate sentence

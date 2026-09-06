@@ -77,7 +77,7 @@ export const EditCardModal: React.FC<EditCardModalProps> = ({
           <div>
             <h3 className="text-lg font-black text-slate-900 tracking-tight">Edit Flashcard</h3>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Update word, translation, or tags separated by <code className="px-1 py-0.5 rounded bg-slate-100 font-mono font-bold text-blue-600">::</code>
+              Update word, translation, or tags separated by <code className="px-1 py-0.5 rounded bg-slate-100 font-mono font-bold text-blue-600">;</code>
             </p>
           </div>
           <button
@@ -120,20 +120,20 @@ export const EditCardModal: React.FC<EditCardModalProps> = ({
             />
           </div>
 
-          {/* Tags with :: separator */}
+          {/* Tags with ; separator */}
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                 <Tag className="w-3.5 h-3.5 text-blue-600" />
-                <span>Tags (Separated by ::)</span>
+                <span>Tags (Separated by ;)</span>
               </label>
-              <span className="text-[11px] text-slate-400 font-medium">e.g. greetings::basics::french</span>
+              <span className="text-[11px] text-slate-400 font-medium">e.g. greetings;basics;french</span>
             </div>
             <input
               type="text"
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
-              placeholder="tag1::tag2::tag3"
+              placeholder="tag1;tag2;tag3"
               className="w-full text-xs sm:text-sm font-mono px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-900"
             />
 

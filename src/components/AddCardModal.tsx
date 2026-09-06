@@ -150,7 +150,7 @@ export const AddCardModal: React.FC<AddCardModalProps> = ({
               />
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
-              Separate tags with commas, spaces, or &quot;::&quot; (e.g. #basics, #greetings)
+              Separate tags with commas, spaces, or &quot;;&quot; (e.g. #basics, #greetings)
             </p>
 
             {/* Live Tags Preview */}

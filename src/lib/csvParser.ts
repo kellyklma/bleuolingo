@@ -230,7 +230,7 @@ export function exportDeckToCSV(cards: Flashcard[], filename: string = 'bleuolin
   const rows = cards.map((c) => {
     const front = `"${(c.front || '').replace(/"/g, '""')}"`;
     const back = `"${(c.back || '').replace(/"/g, '""')}"`;
-    const tags = `"${(c.tags ? c.tags.join('::') : '').replace(/"/g, '""')}"`;
+    const tags = `"${(c.tags ? c.tags.join(';') : '').replace(/"/g, '""')}"`;
     return `${front},${back},${tags}`;
   });
 
