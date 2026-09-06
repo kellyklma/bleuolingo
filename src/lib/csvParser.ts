@@ -150,17 +150,12 @@ export function convertRowsToFlashcards(
  * Generates and triggers download of a 3-column Front, Back, Tags sample CSV template
  */
 export function downloadSampleCSV(): void {
-  const sampleContent = `Front,Back,Tags\n"Bonjour","Hello / Good morning","greetings::common::basics"\n"Merci beaucoup","Thank you very much","polite::courtesy::gratitude"\n"S'il vous plaît","Please","polite::courtesy"\n"Enchanté","Nice to meet you","greetings::introductions"\n"À bientôt","See you soon","greetings::farewells"\n"L'eau","Water","food::drinks::nouns"\n"Le pain","Bread","food::bakery::nouns"`;
-
-  const blob = new Blob([sampleContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.href = url;
-  link.setAttribute('download', 'bleuolingo_cards_sample.csv');
+  link.href = `${import.meta.env.BASE_URL}bleuolingo_sample_cards.csv`;
+  link.setAttribute('download', 'bleuolingo_sample_cards.csv');
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
 }
 
 /**
