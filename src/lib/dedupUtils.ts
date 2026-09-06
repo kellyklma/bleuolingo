@@ -1,30 +1,10 @@
 import { Flashcard } from '../types';
 
-/**
- * Normalizes a word by:
- * 1. Trimming whitespace
- * 2. Lowercasing
- * 3. Normalizing Unicode (NFD) and stripping all diacritical marks/accents
- * 4. Normalizing quotes and hyphens for reliable comparison
- */
-export function normalizeWord(str?: string): string {
-  if (!str) return '';
-  return str
-    .trim()
-    .toLowerCase()
-    .replace(/[’‘]/g, "'")
-    .replace(/[“”]/g, '"')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-}
-
-export type DuplicateDecision = 'keep' | 'overwrite';
-
 export interface DuplicateConflict {
-  id: string; // unique identifier for the conflict pair
+  id: string;
   existingCard: Flashcard;
   incomingCard: Flashcard;
-  decision: DuplicateDecision;
+  decision: 'keep' | 'overwrite';
 }
 
 export interface DedupAnalysisResult {
@@ -32,19 +12,32 @@ export interface DedupAnalysisResult {
   conflicts: DuplicateConflict[];
 }
 
+export interface ResolveDuplicatesResult {
+  cardsToAdd: Flashcard[];
+  cardsToUpdate: Flashcard[];
+  overwrittenCount: number;
+  keptCount: number;
+}
+
 /**
- * Compares incoming parsed cards against existing deck cards to identify conflicts.
- *
- * - Matches fronts agnostically (ignoring case, whitespace, and diacritics/accents).
- * - Identical cards (matching all of front, back, tags, and examples) are silently skipped.
- * - Only flags a conflict if the front and/or back matches but a discrepancy is found in the
- *   other fields, prompting user review.
+ * Normalizes text for accent- and case-insensitive matching.
+ */
+function normalizeWord(str: string): string {
+  if (!str) return '';
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * Analyzes incoming CSV rows against existing cards, flagging matches on front or back.
  */
 export function analyzeCardsForDuplicates(
   incomingCards: Flashcard[],
   existingCards: Flashcard[]
 ): DedupAnalysisResult {
-  // 1. Index existing cards by normalized front AND normalized back
   const existingByFront = new Map<string, Flashcard>();
   const existingByBack = new Map<string, Flashcard>();
 
@@ -62,8 +55,6 @@ export function analyzeCardsForDuplicates(
 
   const newCards: Flashcard[] = [];
   const conflicts: DuplicateConflict[] = [];
-
-  // Track incoming entries to avoid adding duplicates within the same import batch
   const seenIncomingFronts = new Set<string>();
   const seenIncomingBacks = new Set<string>();
 
@@ -74,38 +65,24 @@ export function analyzeCardsForDuplicates(
 
     if (!normFront && !normBack) continue;
 
-    // 2. Check for an existing card matching either front or back
     const existing =
       (normFront ? existingByFront.get(normFront) : undefined) ||
       (normBack ? existingByBack.get(normBack) : undefined);
 
     if (existing) {
-      // Check for discrepancies across any relevant fields
-      const frontDiff =
-        normalizeWord(existing.front) !== normalizeWord(incoming.front);
-      const backDiff =
-        normalizeWord(existing.back) !== normalizeWord(incoming.back);
+      const frontDiff = normalizeWord(existing.front) !== normalizeWord(incoming.front);
+      const backDiff = normalizeWord(existing.back) !== normalizeWord(incoming.back);
 
-      const existingTags = (existing.tags || [])
-        .map((t) => t.trim().toLowerCase())
-        .sort()
-        .join(',');
-      const incomingTags = (incoming.tags || [])
-        .map((t) => t.trim().toLowerCase())
-        .sort()
-        .join(',');
-      const tagDiff = existingTags !== incomingTags;
+      const existingTags = (existing.tags || []).map((t) => t.trim().toLowerCase()).sort().join(',');
+      const incomingTags = (incoming.tags || []).map((t) => t.trim().toLowerCase()).sort().join(',');
+      const tagDiff = incoming.tags !== undefined && existingTags !== incomingTags;
 
-      const exampleDiff =
-        (existing.example || '').trim() !== (incoming.example || '').trim();
+      const exampleDiff = (existing.example || '').trim() !== (incoming.example || '').trim();
       const exampleTransDiff =
-        (existing.exampleTranslation || '').trim() !==
-        (incoming.exampleTranslation || '').trim();
+        (existing.exampleTranslation || '').trim() !== (incoming.exampleTranslation || '').trim();
 
-      const hasDiscrepancy =
-        frontDiff || backDiff || tagDiff || exampleDiff || exampleTransDiff;
+      const hasDiscrepancy = frontDiff || backDiff || tagDiff || exampleDiff || exampleTransDiff;
 
-      // Only prompt for conflict resolution if there is an actual difference
       if (hasDiscrepancy) {
         conflicts.push({
           id: `conflict-${i}-${Date.now()}`,
@@ -114,12 +91,10 @@ export function analyzeCardsForDuplicates(
           decision: 'keep',
         });
       }
-      // If 100% identical match, silently drop/skip duplicate
     } else if (
       (normFront && seenIncomingFronts.has(normFront)) ||
       (normBack && seenIncomingBacks.has(normBack))
     ) {
-      // Drop duplicate that appeared earlier in the same CSV
       continue;
     } else {
       if (normFront) seenIncomingFronts.add(normFront);
@@ -136,17 +111,13 @@ export function analyzeCardsForDuplicates(
 }
 
 /**
- * Builds the merged updated cards and new cards based on the duplicate resolution decisions.
+ * Resolves duplicate conflicts, preserving FSRS learning progress and protecting tags 
+ * from accidental blank overwrites.
  */
 export function resolveDuplicates(
   conflicts: DuplicateConflict[],
   newCards: Flashcard[]
-): {
-  cardsToUpdate: Flashcard[];
-  cardsToAdd: Flashcard[];
-  overwrittenCount: number;
-  keptCount: number;
-} {
+): ResolveDuplicatesResult {
   const cardsToUpdate: Flashcard[] = [];
   let overwrittenCount = 0;
   let keptCount = 0;
@@ -154,16 +125,37 @@ export function resolveDuplicates(
   for (const conflict of conflicts) {
     if (conflict.decision === 'overwrite') {
       overwrittenCount++;
-      // Overwrite the existing card's text & tags, but preserve FSRS learning progress
+
+      const incomingTags = conflict.incomingCard.tags;
+      const existingTags = conflict.existingCard.tags || [];
+
+      // Safe tag resolution:
+      // - If incomingTags is undefined (blank cell), keep existing tags.
+      // - If user explicitly wrote 'none' or 'clear', wipe tags to [].
+      // - Otherwise, apply the new tags.
+      let resolvedTags = existingTags;
+      if (incomingTags !== undefined) {
+        if (
+          incomingTags.length === 1 &&
+          ['none', 'clear', '-', '[none]'].includes(incomingTags[0].toLowerCase())
+        ) {
+          resolvedTags = [];
+        } else {
+          resolvedTags = incomingTags;
+        }
+      }
+
       cardsToUpdate.push({
-        ...conflict.existingCard,
-        front: conflict.incomingCard.front,
-        back: conflict.incomingCard.back,
-        tags: conflict.incomingCard.tags ?? conflict.existingCard.tags,
-        example: conflict.incomingCard.example ?? conflict.existingCard.example,
+        ...conflict.existingCard, // Preserves ID, FSRS states, intervals, repetition counts, and due dates
+        front: conflict.incomingCard.front.trim(),
+        back: conflict.incomingCard.back.trim(),
+        tags: resolvedTags,
+        example: conflict.incomingCard.example?.trim() || conflict.existingCard.example,
         exampleTranslation:
-          conflict.incomingCard.exampleTranslation ?? conflict.existingCard.exampleTranslation,
-        lang: conflict.incomingCard.lang ?? conflict.existingCard.lang,
+          conflict.incomingCard.exampleTranslation?.trim() ||
+          conflict.existingCard.exampleTranslation,
+        lang: conflict.incomingCard.lang || conflict.existingCard.lang,
+        modifiedAt: Date.now(),
       });
     } else {
       keptCount++;
