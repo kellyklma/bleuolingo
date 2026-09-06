@@ -33,14 +33,17 @@ export interface DedupAnalysisResult {
 }
 
 /**
- * Compares incoming parsed cards against existing deck cards to find duplicates,
- * ignoring capitalization, accents, and diacritics.
+ * Compares incoming parsed cards against existing deck cards to identify conflicts.
+ *
+ * - Matches fronts agnostically (ignoring case, whitespace, and diacritics/accents).
+ * - Identical cards (matching front, back, tags, and examples) are silently skipped.
+ * - Only flags a conflict if the front matches but a discrepancy is found in the
+ *   translation (back), tags, or example fields, prompting user review.
  */
 export function analyzeCardsForDuplicates(
   incomingCards: Flashcard[],
   existingCards: Flashcard[]
 ): DedupAnalysisResult {
-  // Index existing cards by normalized front word
   const existingMap = new Map<string, Flashcard>();
   for (const card of existingCards) {
     const norm = normalizeWord(card.front);
@@ -60,14 +63,33 @@ export function analyzeCardsForDuplicates(
 
     if (existingMap.has(norm)) {
       const existing = existingMap.get(norm)!;
-      conflicts.push({
-        id: `conflict-${i}-${Date.now()}`,
-        existingCard: existing,
-        incomingCard: incoming,
-        decision: 'keep', // Default to keep existing card unless user chooses overwrite
-      });
+
+      // Check for discrepancies in back, tags, or example fields
+      const backDiff = (existing.back || '').trim() !== (incoming.back || '').trim();
+      
+      const existingTags = (existing.tags || []).map((t) => t.trim()).sort().join(',');
+      const incomingTags = (incoming.tags || []).map((t) => t.trim()).sort().join(',');
+      const tagDiff = existingTags !== incomingTags;
+
+      const exampleDiff =
+        (existing.example || '').trim() !== (incoming.example || '').trim();
+      const exampleTransDiff =
+        (existing.exampleTranslation || '').trim() !==
+        (incoming.exampleTranslation || '').trim();
+
+      const hasDiscrepancy = backDiff || tagDiff || exampleDiff || exampleTransDiff;
+
+      // Only prompt for review if there is an actual difference
+      if (hasDiscrepancy) {
+        conflicts.push({
+          id: `conflict-${i}-${Date.now()}`,
+          existingCard: existing,
+          incomingCard: incoming,
+          decision: 'keep',
+        });
+      }
+      // If 100% identical, do nothing (silently kept as-is)
     } else if (seenIncomingNorms.has(norm)) {
-      // Duplicate within the incoming CSV itself; skip redundant incoming copies
       continue;
     } else {
       seenIncomingNorms.add(norm);
