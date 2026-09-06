@@ -135,7 +135,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         )}
 
         {/* Firebase Google Auth Button */}
-        <div className="p-3 border-t border-slate-100">
+        <div className="p-3">
           {currentUser ? (
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
