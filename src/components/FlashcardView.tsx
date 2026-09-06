@@ -32,22 +32,17 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
 }) => {
   const [isPlayingPromptAudio, setIsPlayingPromptAudio] = useState(false);
   const [isPlayingAnswerAudio, setIsPlayingAnswerAudio] = useState(false);
-  // Prevent autoplay immediately when entering the study tab
   const isInitialMountRef = useRef(true);
   const promptAudioTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const answerAudioTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const fsrsOptions = getFSRSOptions(card);
 
-  // When sides are reversed:
-  // Prompt = card.back
-  // Answer = card.front
   const promptText = isSidesSwapped ? card.back : card.front;
   const answerText = isSidesSwapped ? card.front : card.back;
   const promptLang = isSidesSwapped ? backLanguage : frontLanguage;
   const answerLang = isSidesSwapped ? frontLanguage : backLanguage;
 
-  // Clear timeouts and reset audio state on unmount or card change
   useEffect(() => {
     if (promptAudioTimeoutRef.current) clearTimeout(promptAudioTimeoutRef.current);
     if (answerAudioTimeoutRef.current) clearTimeout(answerAudioTimeoutRef.current);
@@ -60,7 +55,6 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
     };
   }, [card.id, isFlipped]);
 
-  // Audio helpers with callback state and safety timeout
   const handlePlayPromptAudio = useCallback(
     (e?: React.MouseEvent) => {
       e?.stopPropagation();
@@ -71,7 +65,6 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
         promptLang,
         () => {
           setIsPlayingPromptAudio(true);
-          // Safety timeout in case audio engine fails to fire onEnd
           promptAudioTimeoutRef.current = setTimeout(() => {
             setIsPlayingPromptAudio(false);
           }, 4500);
@@ -95,7 +88,6 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
         answerLang,
         () => {
           setIsPlayingAnswerAudio(true);
-          // Safety timeout in case audio engine fails to fire onEnd
           answerAudioTimeoutRef.current = setTimeout(() => {
             setIsPlayingAnswerAudio(false);
           }, 4500);
@@ -109,7 +101,6 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
     [answerText, answerLang]
   );
 
-  // Auto-play prompt audio when card loads if enabled (bypassing initial tab entry)
   useEffect(() => {
     if (isInitialMountRef.current) {
       isInitialMountRef.current = false;
@@ -120,14 +111,12 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
     }
   }, [card.id, autoPlayOnDisplay, handlePlayPromptAudio]);
 
-  // Auto-play answer audio when flipped if enabled
   useEffect(() => {
     if (autoPlayOnFlip && isFlipped) {
       handlePlayAnswerAudio();
     }
   }, [isFlipped, autoPlayOnFlip, handlePlayAnswerAudio]);
 
-  // Keyboard navigation: Space to flip, 1-4 for ratings, 'a' for prompt audio, 's' for answer audio
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
@@ -170,7 +159,7 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
 
   return (
     <div id="flashcard-interactive-wrapper" className="w-full max-w-xl mx-auto flex flex-col gap-4">
-      {/* The Flashcard 2030 Card Container */}
+      {/* Flashcard Container */}
       <motion.div
         id="flashcard-main-container"
         initial={{ opacity: 0, scale: 0.98 }}
@@ -181,96 +170,45 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
           isFlipped ? 'border-blue-400/90' : 'hover:border-blue-300'
         }`}
       >
-        {/* Card Top Utility Bar - Completely Harmonized Audio Controls */}
-        <div className="flex items-center justify-end w-full">
-          {!isFlipped ? (
-            /* Front Card: Prompt Audio Button */
+        {/* Option 2: Top-Left Anchor Audio Controls */}
+        <div className="absolute top-4 left-4 sm:top-5 sm:left-5 flex items-center gap-1.5 z-10">
+          {/* Prompt Audio Button */}
+          <button
+            id="pronounce-prompt-btn"
+            type="button"
+            onClick={handlePlayPromptAudio}
+            title="Listen to front (A)"
+            className={`h-8 px-2.5 rounded-xl border border-b-2 flex items-center gap-1 transition-all cursor-pointer select-none active:translate-y-0.5 active:border-b ${
+              isPlayingPromptAudio
+                ? 'bg-blue-500 text-white border-blue-600 shadow-xs'
+                : 'bg-slate-50 hover:bg-blue-50 hover:border-blue-200 text-slate-500 hover:text-blue-600 border-slate-200/80'
+            }`}
+          >
+            <Volume2 className={`w-3.5 h-3.5 ${isPlayingPromptAudio ? 'animate-pulse' : ''}`} />
+            <span className="text-[11px] font-bold">Front</span>
+          </button>
+
+          {/* Answer Audio Button (appears on flip) */}
+          {isFlipped && (
             <button
-              id="pronounce-prompt-btn"
+              id="pronounce-answer-btn"
               type="button"
-              onClick={handlePlayPromptAudio}
-              title="Pronounce front prompt (Shortcut: A)"
-              className={`h-9 px-3 rounded-xl border-2 border-b-3 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer select-none ${
-                isPlayingPromptAudio
-                  ? 'bg-blue-500 text-white border-blue-700 shadow-xs'
-                  : 'bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-600'
+              onClick={handlePlayAnswerAudio}
+              title="Listen to back (S)"
+              className={`h-8 px-2.5 rounded-xl border border-b-2 flex items-center gap-1 transition-all cursor-pointer select-none active:translate-y-0.5 active:border-b ${
+                isPlayingAnswerAudio
+                  ? 'bg-blue-500 text-white border-blue-600 shadow-xs'
+                  : 'bg-slate-50 hover:bg-blue-50 hover:border-blue-200 text-slate-500 hover:text-blue-600 border-slate-200/80'
               }`}
             >
-              <Volume2 className={`w-4 h-4 ${isPlayingPromptAudio ? 'animate-pulse' : ''}`} />
-              <span className="text-xs font-bold">Front</span>
-              {isPlayingPromptAudio ? (
-                <span className="flex items-center gap-0.5 h-3 ml-0.5">
-                  <span className="w-0.5 h-full bg-white animate-bounce" />
-                  <span className="w-0.5 h-2/3 bg-white animate-bounce [animation-delay:0.15s]" />
-                  <span className="w-0.5 h-4/5 bg-white animate-bounce [animation-delay:0.3s]" />
-                </span>
-              ) : (
-                <kbd className="hidden sm:inline-block px-1.5 py-0.2 rounded bg-blue-200/60 text-[10px] font-mono text-blue-800">
-                  A
-                </kbd>
-              )}
+              <Volume2 className={`w-3.5 h-3.5 ${isPlayingAnswerAudio ? 'animate-pulse' : ''}`} />
+              <span className="text-[11px] font-bold">Back</span>
             </button>
-          ) : (
-            /* Back Card (Flipped): Consistent Audio Buttons for Both Front & Back */
-            <div className="flex items-center gap-2">
-              <button
-                id="pronounce-prompt-replay-btn"
-                type="button"
-                onClick={handlePlayPromptAudio}
-                title="Replay front prompt audio (Shortcut: A)"
-                className={`h-9 px-3 rounded-xl border-2 border-b-3 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer select-none ${
-                  isPlayingPromptAudio
-                    ? 'bg-blue-500 text-white border-blue-700 shadow-xs'
-                    : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600'
-                }`}
-              >
-                <Volume2 className={`w-4 h-4 ${isPlayingPromptAudio ? 'animate-pulse' : ''}`} />
-                <span className="text-xs font-bold">Front</span>
-                {isPlayingPromptAudio ? (
-                  <span className="flex items-center gap-0.5 h-3 ml-0.5">
-                    <span className="w-0.5 h-full bg-white animate-bounce" />
-                    <span className="w-0.5 h-2/3 bg-white animate-bounce [animation-delay:0.15s]" />
-                    <span className="w-0.5 h-4/5 bg-white animate-bounce [animation-delay:0.3s]" />
-                  </span>
-                ) : (
-                  <kbd className="hidden sm:inline-block px-1.5 py-0.2 rounded bg-slate-200/60 text-[10px] font-mono text-slate-700">
-                    A
-                  </kbd>
-                )}
-              </button>
-
-              <button
-                id="pronounce-answer-btn"
-                type="button"
-                onClick={handlePlayAnswerAudio}
-                title="Pronounce back answer audio (Shortcut: S)"
-                className={`h-9 px-3 rounded-xl border-2 border-b-3 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer select-none ${
-                  isPlayingAnswerAudio
-                    ? 'bg-blue-500 text-white border-blue-700 shadow-xs'
-                    : 'bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-600'
-                }`}
-              >
-                <Volume2 className={`w-4 h-4 ${isPlayingAnswerAudio ? 'animate-pulse' : ''}`} />
-                <span className="text-xs font-bold">Back</span>
-                {isPlayingAnswerAudio ? (
-                  <span className="flex items-center gap-0.5 h-3 ml-0.5">
-                    <span className="w-0.5 h-full bg-white animate-bounce" />
-                    <span className="w-0.5 h-2/3 bg-white animate-bounce [animation-delay:0.15s]" />
-                    <span className="w-0.5 h-4/5 bg-white animate-bounce [animation-delay:0.3s]" />
-                  </span>
-                ) : (
-                  <kbd className="hidden sm:inline-block px-1.5 py-0.2 rounded bg-blue-200/60 text-[10px] font-mono text-blue-800">
-                    S
-                  </kbd>
-                )}
-              </button>
-            </div>
           )}
         </div>
 
-        {/* Center: Prompt & (if revealed) Answer */}
-        <div className="my-auto py-6 text-center">
-          {/* Prompt text */}
+        {/* Center: Clean, perfectly centered Prompt & Answer */}
+        <div className="my-auto py-8 text-center flex flex-col items-center justify-center">
           <h2
             id="flashcard-prompt-text"
             className={`${
@@ -279,29 +217,28 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
                 : promptText.length > 25
                 ? 'text-2xl sm:text-3xl'
                 : 'text-3xl sm:text-5xl'
-            } font-black text-slate-900 tracking-tight leading-relaxed max-w-lg mx-auto select-none`}
+            } font-black text-slate-900 tracking-tight leading-tight select-text max-w-lg`}
           >
             {promptText}
           </h2>
 
-          {/* Answer text (revealed) */}
           {isFlipped && (
             <motion.div
               id="flashcard-answer-container"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.15 }}
-              className="mt-6 pt-5 border-t-2 border-slate-100"
+              className="w-full pt-5 mt-5 border-t-2 border-slate-100 flex justify-center"
             >
               <h3
                 id="flashcard-answer-text"
                 className={`${
                   answerText.length > 50
-                    ? 'text-xl sm:text-2xl'
+                    ? 'text-lg sm:text-xl'
                     : answerText.length > 25
-                    ? 'text-2xl sm:text-3xl'
-                    : 'text-2xl sm:text-4xl'
-                } font-black text-blue-500 leading-snug select-none`}
+                    ? 'text-xl sm:text-2xl'
+                    : 'text-2xl sm:text-3xl'
+                } font-black text-blue-600 leading-snug select-text max-w-lg`}
               >
                 {answerText}
               </h3>
@@ -317,10 +254,9 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
         </div>
       </motion.div>
 
-      {/* Action Controls Below Card - Chunky Duolingo 3D Buttons */}
+      {/* Action Controls Below Card */}
       <div id="flashcard-controls-bar" className="w-full">
         {!isFlipped ? (
-          /* Show Answer Button - Duolingo 3D Chunky Style */
           <button
             id="show-answer-btn"
             onClick={onFlip}
@@ -332,7 +268,6 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
             </kbd>
           </button>
         ) : (
-          /* 4 Chunky Duolingo Rating Buttons with Keyboard Keys */
           <div id="fsrs-buttons-grid" className="grid grid-cols-4 gap-2 sm:gap-3">
             {fsrsOptions.map((opt) => {
               const buttonTheme =
