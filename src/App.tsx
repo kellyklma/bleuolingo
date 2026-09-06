@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Flashcard, ReviewRating, SessionStats, UserProfile } from './types';
 import { STARTER_DECK } from './data/starterDeck';
 import { calculateNextFSRSState } from './lib/fsrs';
@@ -8,7 +8,6 @@ import { FlashcardView } from './components/FlashcardView';
 import { SessionComplete } from './components/SessionComplete';
 import { DeckManagerView } from './components/DeckManagerView';
 import { SettingsView } from './components/SettingsView';
-import { playPronunciation } from './lib/audio';
 import { BleuoMascot } from './components/BleuoMascot';
 import {
   getInitialProfiles,
@@ -23,8 +22,7 @@ import {
 import { loadActivityLog, recordReviewActivity, ActivityLog, formatDateKey } from './lib/activityStorage';
 import { User } from 'firebase/auth';
 import { subscribeToAuth, loginWithGoogle, logout } from './lib/auth';
-import { LogIn, LogOut } from 'lucide-react';
-import { Sparkles, ArrowLeftRight, Volume2, VolumeX, Menu, X } from 'lucide-react';
+import { Sparkles, ArrowLeftRight, Menu, X } from 'lucide-react';
 import {
   fetchUserCardsFirestore,
   saveUserCardsFirestore,
@@ -40,7 +38,7 @@ const FRONT_LANG_KEY = 'bleuolingo_front_lang_v1';
 const BACK_LANG_KEY = 'bleuolingo_back_lang_v1';
 
 export default function App() {
-  // Navigation tab: 'practice' | 'deck'
+  // Navigation tab: 'practice' | 'deck' | 'settings'
   const [activeTab, setActiveTab] = useState<NavigationTab>('practice');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -104,7 +102,7 @@ export default function App() {
     loadActivityLog(userState.activeUserId)
   );
 
-  // Audio auto-play preferences (separate for prompt display and answer flip)
+  // Audio auto-play preferences
   const [autoPlayOnDisplay, setAutoPlayOnDisplay] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(AUTOPLAY_DISPLAY_KEY);
@@ -125,7 +123,7 @@ export default function App() {
     return true;
   });
 
-  // Global switch sides state (Prompt: Back, Answer: Front vs Prompt: Front, Answer: Back)
+  // Global switch sides state
   const [isSidesSwapped, setIsSidesSwapped] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem(SIDES_SWAPPED_KEY) === 'true';
@@ -136,7 +134,7 @@ export default function App() {
   // Active card flipping state
   const [isFlipped, setIsFlipped] = useState(false);
 
-  // Mascot dynamic mood state ('happy' | 'thinking' | 'cheering' | 'wink')
+  // Mascot dynamic mood state
   const [mascotMood, setMascotMood] = useState<'happy' | 'thinking' | 'cheering' | 'wink'>('happy');
 
   // Session stats for tracking progress in current session
@@ -149,21 +147,94 @@ export default function App() {
     sessionStartTime: Date.now(),
   });
 
-  // Practice ahead toggle (allows reviewing cards even before due time)
   const [practiceAhead, setPracticeAhead] = useState(false);
-
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
-  // Save cards for the active user whenever cards change
+  // Lock flag: prevents auto-save from clobbering Firestore before cloud data has been loaded
+  const isCloudLoadedRef = useRef<boolean>(false);
+
+  // Persist helper: writes cards to either Firestore or localStorage
+  const persistCards = useCallback(
+    (cardsToSave: Flashcard[]) => {
+      if (currentUser) {
+        saveUserCardsFirestore(currentUser.uid, cardsToSave);
+      } else {
+        saveUserCards(activeUserId, cardsToSave);
+      }
+    },
+    [currentUser, activeUserId]
+  );
+
+  // Auto-save effect for FSRS review updates and background changes
   useEffect(() => {
     if (currentUser) {
-      saveUserCardsFirestore(currentUser.uid, cards);
+      if (isCloudLoadedRef.current) {
+        saveUserCardsFirestore(currentUser.uid, cards);
+      }
     } else {
       saveUserCards(activeUserId, cards);
     }
   }, [cards, activeUserId, currentUser]);
 
-  // Switch to another learner profile
+  // Auth subscription: safely load remote cards without race-condition overwrites
+  useEffect(() => {
+    let isMounted = true;
+    const unsubscribe = subscribeToAuth(async (user) => {
+      setCurrentUser(user);
+
+      if (user) {
+        isCloudLoadedRef.current = false;
+
+        try {
+          // 1. Fetch remote activity log
+          const cloudActivity = await fetchUserActivityFirestore(user.uid);
+          if (isMounted) setActivityLog(cloudActivity);
+
+          // 2. Fetch remote cards
+          const cloudCards = await fetchUserCardsFirestore(user.uid);
+          if (!isMounted) return;
+
+          if (cloudCards && cloudCards.length > 0) {
+            setCards(cloudCards);
+          } else {
+            // New cloud account with 0 cards: seed existing local deck or starter deck
+            const initialDeck = cards.length > 0 ? cards : STARTER_DECK.map(lowercaseCard);
+            await saveUserCardsFirestore(user.uid, initialDeck);
+            setCards(initialDeck);
+          }
+        } catch (err) {
+          console.error('Failed to sync user data from Firestore on login:', err);
+        } finally {
+          if (isMounted) {
+            isCloudLoadedRef.current = true;
+          }
+        }
+      } else {
+        // Sign-out: reset lock and load guest profile
+        isCloudLoadedRef.current = false;
+        if (isMounted) {
+          setCards(loadUserCards(activeUserId));
+          setActivityLog(loadActivityLog(activeUserId));
+          setSessionStats({
+            totalReviewed: 0,
+            againCount: 0,
+            hardCount: 0,
+            goodCount: 0,
+            easyCount: 0,
+            sessionStartTime: Date.now(),
+          });
+          setIsFlipped(false);
+        }
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [activeUserId]);
+
+  // Switch learner profile (guest mode)
   const handleSelectUser = (userId: string) => {
     if (userId === activeUserId) return;
     saveUserCards(activeUserId, cards);
@@ -183,7 +254,6 @@ export default function App() {
     });
   };
 
-  // Create a brand-new learner profile with its own independent deck & progress
   const handleCreateUser = (name: string) => {
     saveUserCards(activeUserId, cards);
     const newProfile = createUserProfile(name, profiles);
@@ -192,7 +262,7 @@ export default function App() {
       profiles: updatedProfiles,
       activeUserId: newProfile.id,
     });
-    setCards(STARTER_DECK);
+    setCards(STARTER_DECK.map(lowercaseCard));
     setActivityLog(loadActivityLog(newProfile.id));
     setIsFlipped(false);
     setSessionStats({
@@ -205,7 +275,6 @@ export default function App() {
     });
   };
 
-  // Delete a learner profile
   const handleDeleteUser = (userIdToDelete: string) => {
     const { updatedProfiles, nextActiveId } = deleteUserProfile(userIdToDelete, profiles);
     setUserState({
@@ -227,7 +296,6 @@ export default function App() {
     }
   };
 
-  // Rename a learner profile
   const handleRenameUser = (userId: string, newName: string) => {
     const updatedProfiles = renameUserProfile(userId, newName, profiles);
     setUserState((prev) => ({
@@ -236,7 +304,6 @@ export default function App() {
     }));
   };
 
-  // Save audio auto-play settings
   const toggleAutoPlayOnDisplay = () => {
     setAutoPlayOnDisplay((prev) => {
       const next = !prev;
@@ -257,7 +324,6 @@ export default function App() {
     });
   };
 
-  // Toggle switch sides
   const handleToggleSwitchSides = () => {
     setIsSidesSwapped((prev) => {
       const next = !prev;
@@ -269,11 +335,10 @@ export default function App() {
     setIsFlipped(false);
   };
 
-  // Compute card queues based on FSRS due times
+  // Card queues calculation
   const now = Date.now();
 
   const newCards = useMemo(() => cards.filter((c) => c.state === 'new'), [cards]);
-  // Sort: earliest due first
   const learningCards = useMemo(
     () =>
       cards
@@ -288,19 +353,13 @@ export default function App() {
         .sort((a, b) => a.due - b.due),
     [cards, now, practiceAhead]
   );
-  // Active queue due count
-  const dueCount = useMemo(() => {
-    return cards.filter((c) => c.due <= now).length;
-  }, [cards, now]);
+  const dueCount = useMemo(() => cards.filter((c) => c.due <= now).length, [cards, now]);
 
-  // Determine current active card:
-  // Priority: Learning cards due -> Review cards due -> New cards
   const currentCard = useMemo(() => {
     if (learningCards.length > 0) return learningCards[0];
     if (reviewCards.length > 0) return reviewCards[0];
     if (newCards.length > 0) return newCards[0];
     if (practiceAhead && cards.length > 0) {
-      // Pick card with lowest stability
       return [...cards].sort((a, b) => a.stability - b.stability)[0];
     }
     return null;
@@ -309,36 +368,27 @@ export default function App() {
   // Handle rating a card with FSRS
   const handleRateCard = useCallback(
     (rating: ReviewRating) => {
-      // 1. Guard check
       if (!currentCard) return;
-
-      // 2. Assign to local variable to resolve TypeScript's null error
       const activeCard = currentCard;
 
-      // Update mascot expression based on performance
-      if (rating === 4) {
-        setMascotMood('cheering');
-      } else if (rating === 3) {
-        setMascotMood('wink');
-      } else if (rating === 1) {
-        setMascotMood('thinking');
-      } else {
-        setMascotMood('happy');
-      }
+      if (rating === 4) setMascotMood('cheering');
+      else if (rating === 3) setMascotMood('wink');
+      else if (rating === 1) setMascotMood('thinking');
+      else setMascotMood('happy');
 
       const updatedProps = calculateNextFSRSState(activeCard, rating, Date.now());
       const updatedCard: Flashcard = { ...activeCard, ...updatedProps };
 
-      // If rated "Again" (1), push to the end of the cards array so other due cards come first.
-      // Otherwise, update the card in-place.
       setCards((prevCards) => {
+        let nextCards: Flashcard[];
         if (rating === 1) {
-          return [...prevCards.filter((c) => c.id !== activeCard.id), updatedCard];
+          nextCards = [...prevCards.filter((c) => c.id !== activeCard.id), updatedCard];
+        } else {
+          nextCards = prevCards.map((c) => (c.id === activeCard.id ? updatedCard : c));
         }
-        return prevCards.map((c) => (c.id === activeCard.id ? updatedCard : c));
+        return nextCards;
       });
 
-      // Update current session stats
       setSessionStats((prev) => ({
         ...prev,
         totalReviewed: prev.totalReviewed + 1,
@@ -348,13 +398,12 @@ export default function App() {
         easyCount: rating === 4 ? prev.easyCount + 1 : prev.easyCount,
       }));
 
-      // Record review activity (functional update prevents missed review counts)
       if (currentUser) {
         setActivityLog((prevLog) => {
-          const todayKey = formatDateKey(new Date());
+          const today = formatDateKey(new Date());
           const nextLog: ActivityLog = {
             ...prevLog,
-            [todayKey]: (prevLog[todayKey] || 0) + 1,
+            [today]: (prevLog[today] || 0) + 1,
           };
           recordReviewActivityFirestore(currentUser.uid, prevLog, 1);
           return nextLog;
@@ -364,43 +413,74 @@ export default function App() {
         setActivityLog(nextLog);
       }
 
-      // Flip back for next card
       setIsFlipped(false);
     },
     [currentCard, currentUser, activeUserId]
   );
 
-  // Card Operations
-  const handleAddCards = (newCardsToAdd: Flashcard[]) => {
-    if (newCardsToAdd.length === 0) return;
-    setCards((prev) => [...prev, ...newCardsToAdd.map(lowercaseCard)]);
-    setIsFlipped(false);
+  // -------------------------------------------------------------
+  // Card Mutations with Explicit Firestore Persistence Guarantees
+  // -------------------------------------------------------------
+
+  // 1. Single Card Addition
+  const handleAddSingleCard = (newCard: Flashcard) => {
+    const cardFormatted = lowercaseCard(newCard);
+    setCards((prev) => {
+      const nextDeck = [cardFormatted, ...prev];
+      persistCards(nextDeck);
+      return nextDeck;
+    });
   };
 
-  const handleApplyImport = (cardsToAdd: Flashcard[], cardsToUpdate: Flashcard[]) => {
+  // 2. Batch Cards Addition (Direct CSV clean import)
+  const handleAddCards = (newCardsToAdd: Flashcard[]) => {
+    if (newCardsToAdd.length === 0) return;
+    const formatted = newCardsToAdd.map(lowercaseCard);
     setCards((prev) => {
-      const updateMap = new Map(cardsToUpdate.map((c) => [c.id, lowercaseCard(c)]));
-      const updated = prev.map((c) => updateMap.get(c.id) || c);
-      return [...updated, ...cardsToAdd.map(lowercaseCard)];
+      const nextDeck = [...prev, ...formatted];
+      persistCards(nextDeck);
+      return nextDeck;
     });
     setIsFlipped(false);
   };
 
-  const handleAddSingleCard = (newCard: Flashcard) => {
-    setCards((prev) => [lowercaseCard(newCard), ...prev]);
-  };
-
-  const handleUpdateCard = (updatedCard: Flashcard) => {
-    setCards((prev) => prev.map((c) => (c.id === updatedCard.id ? lowercaseCard(updatedCard) : c)));
-  };
-
-  const handleDeleteCard = (id: string) => {
-    setCards((prev) => prev.filter((c) => c.id !== id));
+  // 3. Deduplication Import (New + Overwritten cards)
+  const handleApplyImport = (cardsToAdd: Flashcard[], cardsToUpdate: Flashcard[]) => {
+    setCards((prev) => {
+      const updateMap = new Map(cardsToUpdate.map((c) => [c.id, lowercaseCard(c)]));
+      const updatedExisting = prev.map((c) => updateMap.get(c.id) || c);
+      const nextDeck = [...updatedExisting, ...cardsToAdd.map(lowercaseCard)];
+      persistCards(nextDeck);
+      return nextDeck;
+    });
     setIsFlipped(false);
   };
 
+  // 4. Update Existing Card
+  const handleUpdateCard = (updatedCard: Flashcard) => {
+    const cardFormatted = lowercaseCard(updatedCard);
+    setCards((prev) => {
+      const nextDeck = prev.map((c) => (c.id === cardFormatted.id ? cardFormatted : c));
+      persistCards(nextDeck);
+      return nextDeck;
+    });
+  };
+
+  // 5. Delete Card (Fixed: Guarantees removal reflects in Firestore immediately)
+  const handleDeleteCard = (id: string) => {
+    setCards((prev) => {
+      const nextDeck = prev.filter((c) => c.id !== id);
+      persistCards(nextDeck);
+      return nextDeck;
+    });
+    setIsFlipped(false);
+  };
+
+  // 6. Reset Deck
   const handleResetToDefault = () => {
-    setCards(STARTER_DECK.map(lowercaseCard));
+    const defaultDeck = STARTER_DECK.map(lowercaseCard);
+    setCards(defaultDeck);
+    persistCards(defaultDeck);
     setPracticeAhead(false);
     setIsFlipped(false);
     setSessionStats({
@@ -415,7 +495,11 @@ export default function App() {
 
   const handleResetAllDue = () => {
     const timestamp = Date.now();
-    setCards((prev) => prev.map((c) => ({ ...c, due: timestamp })));
+    setCards((prev) => {
+      const nextDeck = prev.map((c) => ({ ...c, due: timestamp }));
+      persistCards(nextDeck);
+      return nextDeck;
+    });
     setPracticeAhead(false);
     setIsFlipped(false);
   };
@@ -431,41 +515,15 @@ export default function App() {
     });
   };
 
-  // Compute total cards reviewed today across all sessions/devices
   const todayKey = formatDateKey(new Date());
   const todayReviewedCount = activityLog[todayKey] || 0;
-
-  useEffect(() => {
-    const unsubscribe = subscribeToAuth(async (user) => {
-      setCurrentUser(user);
-      if (user) {
-        // 1. Fetch remote activity log
-        const cloudActivity = await fetchUserActivityFirestore(user.uid);
-        setActivityLog(cloudActivity);
-
-        // 2. Fetch remote cards
-        const cloudCards = await fetchUserCardsFirestore(user.uid);
-        if (cloudCards && cloudCards.length > 0) {
-          setCards(cloudCards);
-        } else {
-          // If brand new user, sync current cards (or STARTER_DECK) to Firestore
-          await saveUserCardsFirestore(user.uid, cards);
-        }
-      } else {
-        // Revert to local storage if logged out
-        setCards(loadUserCards(activeUserId));
-        setActivityLog(loadActivityLog(activeUserId));
-      }
-    });
-    return () => unsubscribe();
-  }, [activeUserId]);
 
   return (
     <div
       id="app-root-layout"
       className="min-h-screen bg-slate-50/70 text-slate-900 flex flex-col md:flex-row font-sans selection:bg-blue-100 selection:text-blue-900"
     >
-      {/* Mobile Top Header (Hidden on md+) */}
+      {/* Mobile Top Header */}
       <header className="md:hidden flex items-center justify-between p-4 bg-white border-b border-slate-200/80 sticky top-0 z-40">
         <div className="flex items-center gap-2.5">
           <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200/80 flex items-center justify-center p-0.5">
@@ -477,7 +535,7 @@ export default function App() {
             </div>
             <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-semibold">
               <span className="text-slate-700 font-bold">
-                {profiles.find((p) => p.id === activeUserId)?.name || 'Learner'}
+                {currentUser?.displayName || profiles.find((p) => p.id === activeUserId)?.name || 'Learner'}
               </span>
               <span>•</span>
               <span>{dueCount} cards due</span>
@@ -494,7 +552,7 @@ export default function App() {
         </button>
       </header>
 
-      {/* Left Hand Navigation Column (Sidebar) */}
+      {/* Sidebar Navigation */}
       <div className={`${mobileMenuOpen ? 'block' : 'hidden'} md:block`}>
         <AppSidebar
           activeTab={activeTab}
@@ -529,9 +587,7 @@ export default function App() {
         {/* Practice / Flashcard View */}
         {activeTab === 'practice' && (
           <div className="flex-1 flex flex-col w-full max-w-2xl mx-auto px-4 py-4 sm:py-6">
-            {/* Minimal Ergonomic Practice Header with Clean Reverse Toggle */}
             <div className="w-full flex items-center justify-between gap-3 mb-3">
-              {/* Duolingo Chunky Progress Bar */}
               <div className="flex-1">
                 <SessionProgress
                   reviewedThisSession={sessionStats.totalReviewed}
@@ -542,24 +598,21 @@ export default function App() {
                 />
               </div>
 
-              {/* Clean Study Controls */}
               <div className="flex items-center gap-2 shrink-0">
-                {/* Clean Reverse Sides Toggle */}
                 <button
                   type="button"
                   id="study-reverse-sides-btn"
                   onClick={handleToggleSwitchSides}
                   title={isSidesSwapped ? 'Reverse Mode: Active' : 'Reverse Mode: Inactive'}
                   className={`h-9 px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${isSidesSwapped
-                    ? 'bg-blue-500 border-blue-600 text-white shadow-xs'
-                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-2xs'
+                      ? 'bg-blue-500 border-blue-600 text-white shadow-xs'
+                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-2xs'
                     }`}
                 >
                   <ArrowLeftRight className="w-3.5 h-3.5" />
                   <span>Reverse</span>
                 </button>
 
-                {/* Quick Practice Ahead Trigger if caught up */}
                 {!currentCard && (
                   <button
                     type="button"
@@ -576,7 +629,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Flashcard Component (Directly in upper focal zone, zero gap!) */}
             <div className="flex-1 flex flex-col justify-start mt-1 sm:mt-2">
               {currentCard ? (
                 <FlashcardView
@@ -624,7 +676,7 @@ export default function App() {
           />
         )}
 
-        {/* Dedicated Settings View */}
+        {/* Settings View */}
         {activeTab === 'settings' && (
           <SettingsView
             activeProfile={profiles.find((p) => p.id === activeUserId)}

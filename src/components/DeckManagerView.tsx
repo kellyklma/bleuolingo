@@ -160,7 +160,7 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
             modified: parsed.modified ?? true,
           };
         }
-      } catch {}
+      } catch { }
     }
     return {
       front: true,
@@ -341,9 +341,8 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
           onAddCards(newCards);
           setStatusMessage({
             type: 'success',
-            text: `Successfully added ${newCards.length} new card${
-              newCards.length === 1 ? '' : 's'
-            }!`,
+            text: `Successfully added ${newCards.length} new card${newCards.length === 1 ? '' : 's'
+              }!`,
           });
         }
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -389,10 +388,8 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
 
     if (onApplyImport) {
       onApplyImport(cardsToAdd, cardsToUpdate);
-    } else {
-      if (cardsToAdd.length > 0) {
-        onAddCards(cardsToAdd);
-      }
+    } else if (cardsToAdd.length > 0) {
+      onAddCards(cardsToAdd);
     }
 
     const summaryParts: string[] = [];
@@ -482,11 +479,10 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
-        className={`w-full p-4 sm:p-5 rounded-3xl border-2 border-dashed transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-between gap-4 ${
-          isDragging
+        className={`w-full p-4 sm:p-5 rounded-3xl border-2 border-dashed transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-between gap-4 ${isDragging
             ? 'border-blue-500 bg-blue-50/80 shadow-md scale-[1.01]'
             : 'border-slate-200 hover:border-blue-300 bg-white/80 hover:bg-white shadow-xs'
-        }`}
+          }`}
       >
         <div className="flex items-center gap-3.5 text-center sm:text-left">
           <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
@@ -532,11 +528,10 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
       {/* Notification / Status Message */}
       {statusMessage && (
         <div
-          className={`p-3.5 rounded-2xl flex items-center justify-between gap-3 text-xs sm:text-sm font-bold shadow-xs animate-in fade-in duration-150 ${
-            statusMessage.type === 'success'
+          className={`p-3.5 rounded-2xl flex items-center justify-between gap-3 text-xs sm:text-sm font-bold shadow-xs animate-in fade-in duration-150 ${statusMessage.type === 'success'
               ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
               : 'bg-rose-50 text-rose-800 border border-rose-200'
-          }`}
+            }`}
         >
           <div className="flex items-center gap-2.5">
             {statusMessage.type === 'success' ? (
@@ -578,55 +573,50 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
               <button
                 type="button"
                 onClick={() => setFilterState('all')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                  filterState === 'all'
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${filterState === 'all'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-500 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 All ({cards.length})
               </button>
               <button
                 type="button"
                 onClick={() => setFilterState('due')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                  filterState === 'due'
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${filterState === 'due'
                     ? 'bg-white text-rose-600 shadow-xs'
                     : 'text-slate-500 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 Due ({dueCount})
               </button>
               <button
                 type="button"
                 onClick={() => setFilterState('new')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                  filterState === 'new'
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${filterState === 'new'
                     ? 'bg-white text-blue-600 shadow-xs'
                     : 'text-slate-500 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 New ({newCount})
               </button>
               <button
                 type="button"
                 onClick={() => setFilterState('learning')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                  filterState === 'learning'
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${filterState === 'learning'
                     ? 'bg-white text-amber-600 shadow-xs'
                     : 'text-slate-500 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 Learning ({learningCount})
               </button>
               <button
                 type="button"
                 onClick={() => setFilterState('review')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                  filterState === 'review'
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${filterState === 'review'
                     ? 'bg-white text-emerald-600 shadow-xs'
                     : 'text-slate-500 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 Review ({reviewCount})
               </button>
@@ -638,11 +628,10 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
                 id="deck-columns-menu-btn"
                 type="button"
                 onClick={() => setShowColumnsMenu((prev) => !prev)}
-                className={`h-9 px-3 rounded-2xl border text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                  showColumnsMenu
+                className={`h-9 px-3 rounded-2xl border text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${showColumnsMenu
                     ? 'bg-blue-50 border-blue-300 text-blue-700'
                     : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-2xs'
-                }`}
+                  }`}
                 title="Customize table columns"
               >
                 <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
@@ -711,18 +700,16 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
                   key={tag}
                   type="button"
                   onClick={() => handleToggleTag(tag)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                    isSelected
+                  className={`px-2.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${isSelected
                       ? 'bg-blue-600 text-white shadow-xs'
                       : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                  }`}
+                    }`}
                   title={isSelected ? 'Click to deselect tag' : 'Click to filter by this tag'}
                 >
                   <span>#{tag}</span>
                   <span
-                    className={`text-[10px] ${
-                      isSelected ? 'text-blue-100' : 'text-slate-400'
-                    }`}
+                    className={`text-[10px] ${isSelected ? 'text-blue-100' : 'text-slate-400'
+                      }`}
                   >
                     ({count})
                   </span>
@@ -990,11 +977,10 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
                             <button
                               type="button"
                               onClick={() => handlePlayWord(c)}
-                              className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
-                                playingId === c.id
+                              className={`p-1.5 rounded-lg border transition-all cursor-pointer ${playingId === c.id
                                   ? 'bg-blue-500 text-white border-blue-600'
                                   : 'bg-slate-50 hover:bg-blue-50 text-slate-400 hover:text-blue-600 border-slate-200 hover:border-blue-200'
-                              }`}
+                                }`}
                               title="Pronounce word"
                             >
                               <Volume2 className="w-3.5 h-3.5" />
@@ -1021,11 +1007,10 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
                                   key={idx}
                                   type="button"
                                   onClick={() => handleToggleTag(t)}
-                                  className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-colors ${
-                                    selectedTags.includes(t)
+                                  className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-colors ${selectedTags.includes(t)
                                       ? 'bg-blue-600 text-white'
                                       : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
-                                  }`}
+                                    }`}
                                 >
                                   <span>#{t}</span>
                                 </button>
@@ -1041,13 +1026,12 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
                       {visibleColumns.status && (
                         <td className="py-3 px-4">
                           <span
-                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider ${
-                              c.state === 'review'
+                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider ${c.state === 'review'
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : c.state === 'learning'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-blue-100 text-blue-800'
-                            }`}
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-blue-100 text-blue-800'
+                              }`}
                           >
                             {c.state}
                           </span>
