@@ -8,19 +8,18 @@ nous,we (formal),word
 vous,you / you all (formal),word
 ils,they (masculine plural),word
 elles,they (feminine plural),word
-thé,tea,word
-café,coffee,word
+un thé,a tea,word
+un café,a coffee,word
 madame,"ma'am, Mrs.",word
-un,"an, a, one",word
 bonjour,hello,word
 si'l vous plaît,please,word
-croissant,croissant,word
-éclair,eclair,word
+un croissant,a croissant,word
+un éclair,an eclair,word
 je voudrais,i'd like,phrase
 oui,yes,word
 et,and,word
 merci,thank you,word
-sandwich,sandwich,word
+un sandwich,a sandwich,word
 non,no,word
 monsieur,sir,word
 ou,or,word
@@ -35,21 +34,42 @@ moi aussi,me too,phrase
 à bientôt,see you soon,sentence
 tu viens d'où,where are you from,sentence
 tu viens de,you are from,phrase
-frère,brother,word
+un frère,a brother,word
 oh,oh,word
 tu as,you have,phrase
-fils,son,word
-sœur,sister,word
-fille,daughter,word
+un fils,a son,word
+une sœur,a sister,word
+une fille,a daughter,word
 j'ai,i have,word
 elle vient,she comes,phrase
-tante,aunt,word
-oncle,uncle,word
+une tante,an aunt,word
+un oncle,an uncle,word
 maintenant,now,word
 elle habite,she lives,phrase
-nièce,niece,word
-neveu,nephew,word
+une nièce,a niece,word
+un neveu,a nephew,word
 il habite,he lives,phrase
 il vient,he comes,phrase
 amusant,"funny, entertaining",word
 méchant,mean,word
+zéro,zero,word
+un/une,one,word
+deux,two,word
+trois,three,word
+quatre,four,word
+cinq,five,word
+six,six,word
+sept,seven,word
+huit,eight,word
+neuf,nine,word
+dix,ten,word
+onze,eleven,word
+douze,twelve,word
+treize,thirteen,word
+quatorze,fourteen,word
+quinze,fifteen,word
+seize,sixteen,word
+dix-sept,seventeen,word
+dix-huit,eighteen,word
+dix-neuf,nineteen,word
+vingt,twenty,word
