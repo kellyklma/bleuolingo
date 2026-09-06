@@ -317,8 +317,9 @@ export default function App() {
         easyCount: rating === 4 ? prev.easyCount + 1 : prev.easyCount,
       }));
 
-      // Record review activity for the progress heatmap
-      setActivityLog(() => recordReviewActivity(activeUserId, 1));
+      // Record review activity once and update state directly
+      const nextLog = recordReviewActivity(activeUserId, 1);
+      setActivityLog(nextLog);
 
       // Flip back for next card
       setIsFlipped(false);
@@ -474,11 +475,10 @@ export default function App() {
                   id="study-reverse-sides-btn"
                   onClick={handleToggleSwitchSides}
                   title={isSidesSwapped ? 'Reverse Mode: Active' : 'Reverse Mode: Inactive'}
-                  className={`h-9 px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    isSidesSwapped
+                  className={`h-9 px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${isSidesSwapped
                       ? 'bg-blue-500 border-blue-600 text-white shadow-xs'
                       : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-2xs'
-                  }`}
+                    }`}
                 >
                   <ArrowLeftRight className="w-3.5 h-3.5" />
                   <span>Reverse</span>
