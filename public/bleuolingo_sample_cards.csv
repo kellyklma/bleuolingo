@@ -3,55 +3,11 @@ je,i,word
 tu,you,word
 il,he,word
 elle,she,word
-on,one / we / people,word
+on,we (informal),word
 nous,we (formal),word
 vous,you / you all (formal),word
-ils,they (masculine plural),word
-elles,they (feminine plural),word
-un thé,a tea,word
-un café,a coffee,word
-madame,"ma'am, Mrs.",word
-bonjour,hello,word
-si'l vous plaît,please,word
-un croissant,a croissant,word
-un éclair,an eclair,word
-je voudrais,i'd like,phrase
-oui,yes,word
-et,and,word
-merci,thank you,word
-un sandwich,a sandwich,word
-non,no,word
-monsieur,sir,word
-ou,or,word
-parfait,perfect,word
-au revoir,goodbye,word
-enchanté,nice to meet you,word
-ça va,"how are you?, i am fine",word
-bien,good,word
-je m'apelle,"my name is, i am called",phrase
-et toi,and you,phrase
-moi aussi,me too,phrase
-à bientôt,see you soon,sentence
-tu viens d'où,where are you from,sentence
-tu viens de,you are from,phrase
-un frère,a brother,word
-oh,oh,word
-tu as,you have,phrase
-un fils,a son,word
-une sœur,a sister,word
-une fille,a daughter,word
-j'ai,i have,word
-elle vient,she comes,phrase
-une tante,an aunt,word
-un oncle,an uncle,word
-maintenant,now,word
-elle habite,she lives,phrase
-une nièce,a niece,word
-un neveu,a nephew,word
-il habite,he lives,phrase
-il vient,he comes,phrase
-amusant,"funny, entertaining",word
-méchant,mean,word
+ils,they (masculine),word
+elles,they (feminine),word
 zéro,zero,word
 un/une,one,word
 deux,two,word
@@ -73,3 +29,58 @@ dix-sept,seventeen,word
 dix-huit,eighteen,word
 dix-neuf,nineteen,word
 vingt,twenty,word
+un thé,a tea,word
+un café,a coffee,word
+madame,"ma'am, Mrs.",word
+bonjour,hello,word
+s'il vous plaît,please,word
+un croissant,a croissant,word
+un éclair,an eclair,word
+je voudrais,i'd like,phrase
+oui,yes,word
+et,and,word
+merci,thank you,word
+un sandwich,a sandwich,word
+non,no,word
+monsieur,sir,word
+ou,or,word
+parfait / parfaite,perfect (masculine / feminine),word
+au revoir,goodbye,word
+enchanté / enchantée,nice to meet you (masculine / feminine),word
+ça va,"how are you?, i am fine",word
+bien,good,word
+je m'appelle,"my name is, i am called",phrase
+et toi,and you,phrase
+moi aussi,me too,phrase
+à bientôt,see you soon,sentence
+tu viens d'où,where are you from,sentence
+tu viens de,you are from,phrase
+un frère,a brother,word
+oh,oh,word
+tu as,you have,phrase
+un fils,a son,word
+une sœur,a sister,word
+une fille,a daughter,word
+j'ai,i have,word
+elle vient,she comes,phrase
+une tante,an aunt,word
+un oncle,an uncle,word
+maintenant,now,word
+elle habite,she lives,phrase
+une nièce,a niece,word
+un neveu,a nephew,word
+il habite,he lives,phrase
+il vient,he comes,phrase
+amusant / amusante,"funny, entertaining (masculine / feminine)",word
+méchant / méchante,mean (masculine / feminine),word
+bien sûr,of course,phrase
+ma sœur,my sister,phrase
+ma nièce,my niece,phrase
+très,very,word
+intéressant / intéressante,interesting (masculine / feminine),word
+toujours,always,word
+ma tante,my aunt,phrase
+mon fils,my son,phrase
+mon frère,my brother,phrase
+but,mais,but
+pas du tout,not at all,phrase
