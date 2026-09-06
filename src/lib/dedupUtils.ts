@@ -19,10 +19,12 @@ export interface ResolveDuplicatesResult {
   keptCount: number;
 }
 
+export type DuplicateDecision = 'keep' | 'overwrite';
+
 /**
  * Normalizes text for accent- and case-insensitive matching.
  */
-function normalizeWord(str: string): string {
+export function normalizeWord(str: string): string {
   if (!str) return '';
   return str
     .normalize('NFD')
