@@ -1,8 +1,7 @@
 /**
  * Dual-Engine Audio Pronunciation System
- * 1. Primary: Server-side High-Fidelity Neural TTS stream (/api/tts)
- *    - Works inside sandboxed iframes, mobile WebKit, Chrome, Brave, Safari without permissions policy blocks.
- * 2. Secondary: Client-side Web Speech API synthesis fallback.
+ * 1. Primary (Local / Hosted Server): Server-side High-Fidelity Neural TTS (/api/tts)
+ * 2. Primary (GitHub Pages / Static Client): Direct Web Speech API synthesis fallback
  */
 
 let activeAudio: HTMLAudioElement | null = null;
@@ -67,22 +66,17 @@ export const AVAILABLE_LANGUAGES: LanguageOption[] = [
   { code: 'zh', label: 'Chinese (中文)', testPhrase: '你好！今天过得怎么样？' },
 ];
 
-/**
- * Intelligent language detection helper.
- */
 export function resolveLanguage(text: string, cardLang: string = 'fr'): string {
   if (cardLang && cardLang !== 'auto') {
     return cardLang.split('-')[0].toLowerCase();
   }
 
   const clean = text.trim();
-  // French accent characters
   const frenchRegex = /[éèêëàâäôöûüùçîïœæ]/i;
   if (frenchRegex.test(clean)) {
     return 'fr';
   }
 
-  // Common English words
   const englishRegex = /\b(the|a|an|hello|good|morning|afternoon|evening|please|thank|you|very|much|nice|to|meet|see|soon|water|bread|apple|how|are|what|is|where|who|yes|no|cat|dog|book|car|house|room|friend|time|day|night|work|eat|drink)\b/i;
   if (englishRegex.test(clean) && !frenchRegex.test(clean)) {
     return 'en';
@@ -92,24 +86,9 @@ export function resolveLanguage(text: string, cardLang: string = 'fr'): string {
 }
 
 /**
- * Plays speech for the provided text.
- * Always prefers the crystal-clear `/api/tts` endpoint, falling back to Web Speech.
+ * Stop any ongoing audio or speech immediately and reset references.
  */
-export function playPronunciation(
-  text: string,
-  targetLang: string = 'fr',
-  onStart?: () => void,
-  onEnd?: () => void
-): void {
-  const cleanText = text.trim();
-  if (!cleanText) {
-    onEnd?.();
-    return;
-  }
-
-  const lang = resolveLanguage(cleanText, targetLang);
-
-  // Stop any ongoing audio
+export function stopPronunciation(): void {
   if (activeAudio) {
     try {
       activeAudio.pause();
@@ -127,8 +106,58 @@ export function playPronunciation(
       // ignore
     }
   }
+  currentUtterance = null;
+}
 
-  // 1. Try Server-Side High-Quality Neural TTS
+export function playPronunciation(
+  text: string,
+  targetLang: string = 'fr',
+  onStart?: () => void,
+  onEnd?: () => void
+): void {
+  const cleanText = text.trim();
+  if (!cleanText) {
+    onEnd?.();
+    return;
+  }
+
+  const lang = resolveLanguage(cleanText, targetLang);
+
+  // Clean stop previous sounds
+  stopPronunciation();
+
+  // Guard against duplicate callback executions
+  let ended = false;
+  const safeEnd = () => {
+    if (!ended) {
+      ended = true;
+      onEnd?.();
+    }
+  };
+
+  // If on GitHub Pages or any static host without /api backend, jump straight to browser speech
+  const isStaticHost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname.endsWith('github.io') || window.location.hostname.endsWith('surge.sh'));
+
+  if (isStaticHost) {
+    fallbackToBrowserSynthesis(cleanText, lang, onStart, safeEnd);
+    return;
+  }
+
+  // Otherwise, attempt the server endpoint
+  let fallbackHandled = false;
+  const triggerFallback = () => {
+    if (!fallbackHandled) {
+      fallbackHandled = true;
+      if (activeAudio) {
+        activeAudio.src = '';
+        activeAudio = null;
+      }
+      fallbackToBrowserSynthesis(cleanText, lang, onStart, safeEnd);
+    }
+  };
+
   try {
     const ttsUrl = `/api/tts?text=${encodeURIComponent(cleanText)}&lang=${encodeURIComponent(lang)}`;
     const audio = new Audio(ttsUrl);
@@ -145,15 +174,11 @@ export function playPronunciation(
       if (activeAudio === audio) {
         activeAudio = null;
       }
-      onEnd?.();
+      safeEnd();
     };
 
     audio.onerror = () => {
-      if (activeAudio === audio) {
-        activeAudio = null;
-      }
-      // If server TTS fails, fallback to browser synthesis
-      fallbackToBrowserSynthesis(cleanText, lang, onStart, onEnd);
+      triggerFallback();
     };
 
     const playPromise = audio.play();
@@ -164,19 +189,15 @@ export function playPronunciation(
             onStart?.();
           }
         })
-        .catch((err) => {
-          console.warn('Audio play prevented or failed, falling back:', err);
-          fallbackToBrowserSynthesis(cleanText, lang, onStart, onEnd);
+        .catch(() => {
+          triggerFallback();
         });
     }
   } catch {
-    fallbackToBrowserSynthesis(cleanText, lang, onStart, onEnd);
+    triggerFallback();
   }
 }
 
-/**
- * Fallback synthesizer using Web Speech API
- */
 function fallbackToBrowserSynthesis(
   text: string,
   lang: string,
@@ -224,28 +245,44 @@ function fallbackToBrowserSynthesis(
       }
     }
 
-    const matchingVoice =
-      cachedVoices.find((v) => v.lang.toLowerCase() === fullLang.toLowerCase()) ||
-      cachedVoices.find((v) => v.lang.toLowerCase().startsWith(lang)) ||
+    // Prefer high-quality/natural voices over basic system voices
+    const available = cachedVoices.filter(
+      (v) => v.lang.toLowerCase() === fullLang.toLowerCase() || v.lang.toLowerCase().startsWith(lang)
+    );
+
+    const naturalVoice =
+      available.find((v) => /natural|neural|premium|enhanced/i.test(v.name)) ||
+      available.find((v) => !v.localService) ||
+      available[0] ||
       cachedVoices.find((v) => v.default);
 
-    if (matchingVoice) {
-      utterance.voice = matchingVoice;
+    if (naturalVoice) {
+      utterance.voice = naturalVoice;
     }
+
+    let endFired = false;
+    const handleEnd = () => {
+      if (!endFired) {
+        endFired = true;
+        currentUtterance = null;
+        onEnd?.();
+      }
+    };
 
     utterance.onstart = () => {
       onStart?.();
     };
 
-    utterance.onend = () => {
-      currentUtterance = null;
-      onEnd?.();
-    };
+    utterance.onend = handleEnd;
+    utterance.onerror = handleEnd;
 
-    utterance.onerror = () => {
-      currentUtterance = null;
-      onEnd?.();
-    };
+    // Failsafe timer: SpeechSynthesis on Safari/Chrome mobile can drop `onend` if audio locks
+    const estimatedDurationMs = Math.max(1200, (text.length / 10) * 1000);
+    setTimeout(() => {
+      if (currentUtterance === utterance) {
+        handleEnd();
+      }
+    }, estimatedDurationMs + 1000);
 
     window.speechSynthesis.speak(utterance);
   } catch (err) {
