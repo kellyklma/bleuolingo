@@ -11,7 +11,6 @@ import {
 import { BleuoMascot } from './BleuoMascot';
 import { playPronunciation } from '../lib/audio';
 import { UserProfile } from '../types';
-import { UserProfileMenu } from './UserProfileMenu';
 import { User } from 'firebase/auth';
 import { LogIn, LogOut } from 'lucide-react';
 import { ActivityLog } from '../lib/activityStorage';
@@ -180,30 +179,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             </button>
           )}
         </div>
-
-        {/* Per-User Learner Profile Switcher */}
-        {isCollapsed ? (
-          <div className="flex justify-center my-1">
-            <button
-              type="button"
-              onClick={onToggleCollapse}
-              title={`Active Learner: ${activeProfile?.name}`}
-              className={`w-9 h-9 rounded-xl ${activeProfile?.avatarColor || 'bg-blue-500'
-                } text-white flex items-center justify-center font-black text-xs shadow-xs hover:scale-105 transition-transform cursor-pointer`}
-            >
-              {getInitials(activeProfile?.name || 'User')}
-            </button>
-          </div>
-        ) : (
-          <UserProfileMenu
-            profiles={profiles}
-            activeUserId={activeUserId}
-            onSelectUser={onSelectUser}
-            onCreateUser={onCreateUser}
-            onDeleteUser={onDeleteUser}
-            onRenameUser={onRenameUser}
-          />
-        )}
 
         {/* Daily Focus Card (Above Study Tab) */}
         {!isCollapsed && (
