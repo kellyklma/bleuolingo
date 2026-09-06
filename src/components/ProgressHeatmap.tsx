@@ -494,56 +494,6 @@ export const ProgressHeatmap: React.FC<ProgressHeatmapProps> = ({
           </span>
         </div>
       )}
-
-      {/* Recent Activity Breakdown */}
-      <div className="pt-4 border-t border-slate-100 flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-black uppercase tracking-wider text-slate-400">
-            Recent Study Sessions
-          </span>
-          {activeDaysList.length > 0 && (
-            <span className="text-xs font-bold text-blue-600">
-              {activeDaysList.length} total active date{activeDaysList.length === 1 ? '' : 's'}
-            </span>
-          )}
-        </div>
-
-        {activeDaysList.length === 0 ? (
-          <div className="p-4 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center flex flex-col items-center justify-center gap-1.5 py-6">
-            <Sparkles className="w-5 h-5 text-blue-500" />
-            <span className="text-xs font-bold text-slate-700">No reviews logged yet</span>
-            <span className="text-[11px] text-slate-400 font-medium">
-              Review flashcards in the Study tab to start filling your activity map.
-            </span>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-            {activeDaysList.slice(0, 6).map((item) => (
-              <div
-                key={item.dateKey}
-                className="p-3 rounded-2xl bg-slate-50/80 border border-slate-200/80 flex items-center justify-between gap-3"
-              >
-                <div className="flex flex-col">
-                  <span className="text-xs font-black text-slate-800">
-                    {formatRelativeDay(item.dateObj)}
-                  </span>
-                  <span className="text-[10px] font-bold text-slate-400">
-                    {item.dateObj.toLocaleDateString(undefined, {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
-                  </span>
-                </div>
-                <div className="px-2.5 py-1 rounded-xl bg-blue-100/80 text-blue-800 text-xs font-black flex items-center gap-1">
-                  <span>{item.count}</span>
-                  <span className="text-[10px] font-bold text-blue-600">cards</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 };
