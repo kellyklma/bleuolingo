@@ -1,22 +1,14 @@
 import { Flashcard, ReviewRating, FSRSRatingOption } from '../types';
 
-// Standard FSRS default parameters
 const DEFAULT_WEIGHTS = {
-  w0: 0.4, // Initial stability for Again
-  w1: 1.2, // Initial stability for Hard
-  w2: 3.2, // Initial stability for Good
-  w3: 8.0, // Initial stability for Easy
+  w0: 0.4, // Initial stability for Again (~10m)
+  w1: 0.9, // Initial stability for Hard (~1d)
+  w2: 2.5, // Initial stability for Good (~2-3d)
+  w3: 6.0, // Initial stability for Easy (~6d)
   w4: 5.0, // Base difficulty
-  w5: 1.0, // Difficulty step per rating difference
-  factorHard: 1.2,
-  factorGood: 2.5,
-  factorEasy: 3.8,
   requestRetention: 0.9,
 };
 
-/**
- * Format interval (in days) into human-readable compact text (like Anki: 10m, 1d, 3d, 1mo)
- */
 export function formatInterval(days: number): string {
   if (days < 1 / (24 * 60)) {
     return '<1m';
@@ -61,96 +53,90 @@ export function calculateNextFSRSState(
   let nextStability: number;
   let nextDifficulty: number;
   let nextState: Flashcard['state'] = card.state;
-  let nextLapses = card.lapses;
+  let nextLapses = card.lapses || 0;
+  let intervalDays: number;
 
   if (isFirstReview) {
-    // Initial Review calculation
     switch (rating) {
       case 1: // Again
-        nextStability = DEFAULT_WEIGHTS.w0; // ~0.4 days (or ~10m for immediate review)
-        nextDifficulty = Math.min(10, Math.max(1, DEFAULT_WEIGHTS.w4 + 2.5));
+        nextStability = DEFAULT_WEIGHTS.w0;
+        nextDifficulty = 7.0;
         nextState = 'learning';
         nextLapses += 1;
+        intervalDays = 10 / (24 * 60); // 10 minutes
         break;
       case 2: // Hard
         nextStability = DEFAULT_WEIGHTS.w1;
-        nextDifficulty = Math.min(10, Math.max(1, DEFAULT_WEIGHTS.w4 + 1.0));
+        nextDifficulty = 6.0;
         nextState = 'learning';
+        intervalDays = 1; // 1 day
         break;
       case 3: // Good
         nextStability = DEFAULT_WEIGHTS.w2;
         nextDifficulty = DEFAULT_WEIGHTS.w4;
         nextState = 'review';
+        intervalDays = 2.5;
         break;
       case 4: // Easy
         nextStability = DEFAULT_WEIGHTS.w3;
-        nextDifficulty = Math.min(10, Math.max(1, DEFAULT_WEIGHTS.w4 - 1.5));
+        nextDifficulty = 3.5;
         nextState = 'review';
+        intervalDays = 6.0;
         break;
     }
   } else {
-    // Card has been reviewed before
     const lastTime = card.lastReview || now;
     const elapsedDays = Math.max(0.01, (now - lastTime) / (1000 * 60 * 60 * 24));
     
-    // Power-law retrievability
+    // Retrievability (power-law forgetting curve)
     const retrievability = Math.pow(1 + elapsedDays / (9 * Math.max(0.1, card.stability)), -1);
 
-    // Update Difficulty (clamped between 1 and 10)
-    let difficultyDelta = 0;
-    if (rating === 1) difficultyDelta = 1.6;
-    else if (rating === 2) difficultyDelta = 0.6;
-    else if (rating === 3) difficultyDelta = -0.3;
-    else if (rating === 4) difficultyDelta = -1.0;
+    // Difficulty delta with mean reversion toward 5.0
+    let delta = 0;
+    if (rating === 1) delta = 1.4;
+    else if (rating === 2) delta = 0.5;
+    else if (rating === 3) delta = -0.3;
+    else if (rating === 4) delta = -1.0;
 
-    nextDifficulty = Math.min(10, Math.max(1, card.difficulty + difficultyDelta));
+    const rawDifficulty = (card.difficulty || 5.0) + delta;
+    nextDifficulty = Math.min(10, Math.max(1, 0.1 * 5.0 + 0.9 * rawDifficulty));
 
-    // Update Stability
     if (rating === 1) {
-      // Lapse (forgotten)
+      // Failed in review (Lapse)
       nextState = 'learning';
       nextLapses += 1;
-      nextStability = Math.max(0.1, 0.4 * Math.pow(card.stability, 0.3));
+      nextStability = Math.max(0.2, 0.4 * Math.pow(card.stability, 0.35));
+      intervalDays = 10 / (24 * 60); // 10 minutes re-test
     } else {
       nextState = 'review';
-      const difficultyPenalty = Math.exp(-0.08 * (nextDifficulty - 5));
+      const difficultyFactor = Math.exp(-0.07 * (nextDifficulty - 5));
+      
+      let ratingFactor = 2.5; // Good
+      if (rating === 2) ratingFactor = 1.2; // Hard
+      if (rating === 4) ratingFactor = 3.8; // Easy
 
-      let ratingMultiplier = DEFAULT_WEIGHTS.factorGood;
-      if (rating === 2) ratingMultiplier = DEFAULT_WEIGHTS.factorHard;
-      if (rating === 4) ratingMultiplier = DEFAULT_WEIGHTS.factorEasy;
+      // Stability growth on successful recall
+      const growth = 1 + ratingFactor * difficultyFactor * (1 - retrievability);
+      nextStability = Math.max(1.0, card.stability * growth);
 
-      // FSRS stability growth formula based on retention curve
-      const growth = 1 + ratingMultiplier * difficultyPenalty * (1 - retrievability);
-      nextStability = Math.max(1, card.stability * growth);
+      // Interval scaled to target retention
+      intervalDays = Math.max(1, Math.round(nextStability));
     }
   }
 
-  // Calculate next interval based on stability and target retention
-  let intervalDays: number;
-  if (rating === 1) {
-    // 10 minutes step for lapses / again
-    intervalDays = 10 / (24 * 60);
-  } else {
-    // Interval derived from stability
-    intervalDays = Math.max(1, Math.round(nextStability));
-  }
-
-  const nextDue = now + intervalDays * 24 * 60 * 60 * 1000;
+  const nextDue = now + Math.round(intervalDays * 24 * 60 * 60 * 1000);
 
   return {
     state: nextState,
     stability: Number(nextStability.toFixed(2)),
     difficulty: Number(nextDifficulty.toFixed(2)),
-    reps: card.reps + 1,
+    reps: (card.reps || 0) + 1,
     lapses: nextLapses,
     lastReview: now,
     due: nextDue,
   };
 }
 
-/**
- * Previews the next intervals for all 4 ratings (Again, Hard, Good, Easy)
- */
 export function getFSRSOptions(card: Flashcard, now = Date.now()): FSRSRatingOption[] {
   const ratings: ReviewRating[] = [1, 2, 3, 4];
   const labels: Record<ReviewRating, string> = {
