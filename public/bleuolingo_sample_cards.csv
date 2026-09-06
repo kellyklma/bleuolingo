@@ -33,7 +33,7 @@ un thé,a tea,word
 un café,a coffee,word
 madame,"ma'am, Mrs.",word
 bonjour,hello,word
-s'il vous plaît,please,word
+s'il vous plaît,please,phrase
 un croissant,a croissant,word
 un éclair,an eclair,word
 je voudrais,i'd like,phrase
@@ -45,14 +45,14 @@ non,no,word
 monsieur,sir,word
 ou,or,word
 parfait / parfaite,perfect (masculine / feminine),word
-au revoir,goodbye,word
+au revoir,goodbye,phrase
 enchanté / enchantée,nice to meet you (masculine / feminine),word
-ça va,"how are you?, i am fine",word
+ça va,"how are you?, i am fine",phrase
 bien,good,word
 je m'appelle,"my name is, i am called",phrase
 et toi,and you,phrase
 moi aussi,me too,phrase
-à bientôt,see you soon,sentence
+à bientôt,see you soon,phrase
 tu viens d'où,where are you from,sentence
 tu viens de,you are from,phrase
 un frère,a brother,word
@@ -61,7 +61,7 @@ tu as,you have,phrase
 un fils,a son,word
 une sœur,a sister,word
 une fille,a daughter,word
-j'ai,i have,word
+j'ai,i have,phrase
 elle vient,she comes,phrase
 une tante,an aunt,word
 un oncle,an uncle,word
@@ -82,5 +82,5 @@ toujours,always,word
 ma tante,my aunt,phrase
 mon fils,my son,phrase
 mon frère,my brother,phrase
-but,mais,but
+mais,but,word
 pas du tout,not at all,phrase
