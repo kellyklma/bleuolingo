@@ -25,6 +25,12 @@ import { User } from 'firebase/auth';
 import { subscribeToAuth, loginWithGoogle, logout } from './lib/auth';
 import { LogIn, LogOut } from 'lucide-react';
 import { Sparkles, ArrowLeftRight, Volume2, VolumeX, Menu, X } from 'lucide-react';
+import {
+  fetchUserCardsFirestore,
+  saveUserCardsFirestore,
+  fetchUserActivityFirestore,
+  recordReviewActivityFirestore,
+} from './lib/firestoreStorage';
 
 const AUTOPLAY_DISPLAY_KEY = 'bleuolingo_autoplay_display_v1';
 const AUTOPLAY_FLIP_KEY = 'bleuolingo_autoplay_flip_v1';
@@ -146,10 +152,16 @@ export default function App() {
   // Practice ahead toggle (allows reviewing cards even before due time)
   const [practiceAhead, setPracticeAhead] = useState(false);
 
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
   // Save cards for the active user whenever cards change
   useEffect(() => {
-    saveUserCards(activeUserId, cards);
-  }, [cards, activeUserId]);
+    if (currentUser) {
+      saveUserCardsFirestore(currentUser.uid, cards);
+    } else {
+      saveUserCards(activeUserId, cards);
+    }
+  }, [cards, activeUserId, currentUser]);
 
   // Switch to another learner profile
   const handleSelectUser = (userId: string) => {
@@ -320,9 +332,15 @@ export default function App() {
         easyCount: rating === 4 ? prev.easyCount + 1 : prev.easyCount,
       }));
 
-      // Record review activity once and update state directly
-      const nextLog = recordReviewActivity(activeUserId, 1);
-      setActivityLog(nextLog);
+      // Record review activity for the progress heatmap
+      if (currentUser) {
+        recordReviewActivityFirestore(currentUser.uid, activityLog, 1).then((nextLog) => {
+          setActivityLog(nextLog);
+        });
+      } else {
+        const nextLog = recordReviewActivity(activeUserId, 1);
+        setActivityLog(nextLog);
+      }
 
       // Flip back for next card
       setIsFlipped(false);
@@ -391,14 +409,30 @@ export default function App() {
     });
   };
 
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-
   useEffect(() => {
-    const unsubscribe = subscribeToAuth((user) => {
+    const unsubscribe = subscribeToAuth(async (user) => {
       setCurrentUser(user);
+      if (user) {
+        // 1. Fetch remote activity log
+        const cloudActivity = await fetchUserActivityFirestore(user.uid);
+        setActivityLog(cloudActivity);
+
+        // 2. Fetch remote cards
+        const cloudCards = await fetchUserCardsFirestore(user.uid);
+        if (cloudCards && cloudCards.length > 0) {
+          setCards(cloudCards);
+        } else {
+          // If brand new user, sync current cards (or STARTER_DECK) to Firestore
+          await saveUserCardsFirestore(user.uid, cards);
+        }
+      } else {
+        // Revert to local storage if logged out
+        setCards(loadUserCards(activeUserId));
+        setActivityLog(loadActivityLog(activeUserId));
+      }
     });
     return () => unsubscribe();
-  }, []);
+  }, [activeUserId]);
 
   return (
     <div
