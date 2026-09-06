@@ -433,15 +433,15 @@ export const ProgressHeatmap: React.FC<ProgressHeatmapProps> = ({
 
             {/* Matrix: Day Labels + Week Columns */}
             <div className="flex items-start gap-2">
-              {/* Day of Week Labels (Traditional GitHub style: Mon, Wed, Fri) */}
-              <div className="flex flex-col gap-[3px] text-[9px] font-bold text-slate-400 pt-0.5 select-none w-5">
-                <span className="h-3 flex items-center"></span>
-                <span className="h-3 flex items-center leading-none">Mon</span>
-                <span className="h-3 flex items-center"></span>
-                <span className="h-3 flex items-center leading-none">Wed</span>
-                <span className="h-3 flex items-center"></span>
-                <span className="h-3 flex items-center leading-none">Fri</span>
-                <span className="h-3 flex items-center"></span>
+              {/* Day of Week Labels (Mon, Wed, Fri aligned to 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat) */}
+              <div className="flex flex-col gap-[3px] text-[9px] font-bold text-slate-400 select-none w-5">
+                <span className="h-3 sm:h-3.5" aria-hidden="true" />
+                <span className="h-3 sm:h-3.5 flex items-center leading-none">Mon</span>
+                <span className="h-3 sm:h-3.5" aria-hidden="true" />
+                <span className="h-3 sm:h-3.5 flex items-center leading-none">Wed</span>
+                <span className="h-3 sm:h-3.5" aria-hidden="true" />
+                <span className="h-3 sm:h-3.5 flex items-center leading-none">Fri</span>
+                <span className="h-3 sm:h-3.5" aria-hidden="true" />
               </div>
 
               {/* Week Columns of Clean Square Tiles */}
@@ -461,7 +461,7 @@ export const ProgressHeatmap: React.FC<ProgressHeatmapProps> = ({
                           });
                         }}
                         onMouseLeave={() => setHoveredCell(null)}
-                        className={`w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-[3px] transition-transform hover:scale-125 ${getCellColor(
+                        className={`w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-[3px] transition-transform hover:scale-125 shrink-0 ${getCellColor(
                           day.count,
                           day.isFuture,
                           day.isToday
