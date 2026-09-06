@@ -29,7 +29,6 @@ import {
   parseCSVText,
   convertRowsToFlashcards,
   downloadSampleCSV,
-  downloadSampleWordsCSV,
   exportDeckToCSV,
 } from '../lib/csvParser';
 import {
@@ -512,15 +511,6 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
           >
             <Download className="w-3 h-3" />
             <span>Sample CSV</span>
-          </button>
-          <button
-            type="button"
-            onClick={downloadSampleWordsCSV}
-            className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
-            title="Download 30 French vocabulary words"
-          >
-            <FileSpreadsheet className="w-3 h-3" />
-            <span>Sample Words</span>
           </button>
         </div>
       </div>

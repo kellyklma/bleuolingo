@@ -206,23 +206,6 @@ export function extractWordsFromCSV(rawText: string): string[] {
 }
 
 /**
- * Generates and triggers download of a sample CSV containing vocabulary words
- */
-export function downloadSampleWordsCSV(): void {
-  const sampleContent = `Word\n"bibliothèque"\n"papillon"\n"boulangerie"\n"voyage"\n"soleil"\n"parapluie"\n"croissant"\n"étoile"`;
-
-  const blob = new Blob([sampleContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.setAttribute('download', 'bleuolingo_words_sample.csv');
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-}
-
-/**
  * Exports current flashcard deck to a clean UTF-8 CSV file
  */
 export function exportDeckToCSV(cards: Flashcard[], filename: string = 'bleuolingo_deck.csv'): void {
