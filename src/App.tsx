@@ -20,7 +20,7 @@ import {
   renameUserProfile,
   lowercaseCard,
 } from './lib/userStorage';
-import { loadActivityLog, recordReviewActivity, ActivityLog } from './lib/activityStorage';
+import { loadActivityLog, recordReviewActivity, ActivityLog, formatDateKey } from './lib/activityStorage';
 import { User } from 'firebase/auth';
 import { subscribeToAuth, loginWithGoogle, logout } from './lib/auth';
 import { LogIn, LogOut } from 'lucide-react';
@@ -273,15 +273,21 @@ export default function App() {
   const now = Date.now();
 
   const newCards = useMemo(() => cards.filter((c) => c.state === 'new'), [cards]);
+  // Sort: earliest due first
   const learningCards = useMemo(
-    () => cards.filter((c) => c.state === 'learning' && (practiceAhead || c.due <= now)),
+    () =>
+      cards
+        .filter((c) => c.state === 'learning' && (practiceAhead || c.due <= now))
+        .sort((a, b) => a.due - b.due),
     [cards, now, practiceAhead]
   );
   const reviewCards = useMemo(
-    () => cards.filter((c) => c.state === 'review' && (practiceAhead || c.due <= now)),
+    () =>
+      cards
+        .filter((c) => c.state === 'review' && (practiceAhead || c.due <= now))
+        .sort((a, b) => a.due - b.due),
     [cards, now, practiceAhead]
   );
-
   // Active queue due count
   const dueCount = useMemo(() => {
     return cards.filter((c) => c.due <= now).length;
@@ -303,7 +309,11 @@ export default function App() {
   // Handle rating a card with FSRS
   const handleRateCard = useCallback(
     (rating: ReviewRating) => {
+      // 1. Guard check
       if (!currentCard) return;
+
+      // 2. Assign to local variable to resolve TypeScript's null error
+      const activeCard = currentCard;
 
       // Update mascot expression based on performance
       if (rating === 4) {
@@ -316,11 +326,17 @@ export default function App() {
         setMascotMood('happy');
       }
 
-      const updatedProps = calculateNextFSRSState(currentCard, rating, Date.now());
+      const updatedProps = calculateNextFSRSState(activeCard, rating, Date.now());
+      const updatedCard: Flashcard = { ...activeCard, ...updatedProps };
 
-      setCards((prevCards) =>
-        prevCards.map((c) => (c.id === currentCard.id ? { ...c, ...updatedProps } : c))
-      );
+      // If rated "Again" (1), push to the end of the cards array so other due cards come first.
+      // Otherwise, update the card in-place.
+      setCards((prevCards) => {
+        if (rating === 1) {
+          return [...prevCards.filter((c) => c.id !== activeCard.id), updatedCard];
+        }
+        return prevCards.map((c) => (c.id === activeCard.id ? updatedCard : c));
+      });
 
       // Update current session stats
       setSessionStats((prev) => ({
@@ -332,10 +348,16 @@ export default function App() {
         easyCount: rating === 4 ? prev.easyCount + 1 : prev.easyCount,
       }));
 
-      // Record review activity for the progress heatmap
+      // Record review activity (functional update prevents missed review counts)
       if (currentUser) {
-        recordReviewActivityFirestore(currentUser.uid, activityLog, 1).then((nextLog) => {
-          setActivityLog(nextLog);
+        setActivityLog((prevLog) => {
+          const todayKey = formatDateKey(new Date());
+          const nextLog: ActivityLog = {
+            ...prevLog,
+            [todayKey]: (prevLog[todayKey] || 0) + 1,
+          };
+          recordReviewActivityFirestore(currentUser.uid, prevLog, 1);
+          return nextLog;
         });
       } else {
         const nextLog = recordReviewActivity(activeUserId, 1);
@@ -345,7 +367,7 @@ export default function App() {
       // Flip back for next card
       setIsFlipped(false);
     },
-    [currentCard, activeUserId]
+    [currentCard, currentUser, activeUserId]
   );
 
   // Card Operations
@@ -408,6 +430,10 @@ export default function App() {
       sessionStartTime: Date.now(),
     });
   };
+
+  // Compute total cards reviewed today across all sessions/devices
+  const todayKey = formatDateKey(new Date());
+  const todayReviewedCount = activityLog[todayKey] || 0;
 
   useEffect(() => {
     const unsubscribe = subscribeToAuth(async (user) => {
@@ -478,7 +504,7 @@ export default function App() {
           }}
           dueCount={dueCount}
           totalCards={cards.length}
-          reviewedCount={sessionStats.totalReviewed}
+          reviewedCount={todayReviewedCount}
           activityLog={activityLog}
           mascotMood={mascotMood}
           profiles={profiles}
