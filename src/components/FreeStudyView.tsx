@@ -9,10 +9,12 @@ import {
   X,
   BookOpen,
   Sparkles,
+  Pencil,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Flashcard } from '../types';
 import { playPronunciation } from '../lib/audio';
+import { EditCardModal } from './EditCardModal';
 
 interface FreeStudyViewProps {
   cards: Flashcard[];
@@ -23,6 +25,7 @@ interface FreeStudyViewProps {
   backLanguage?: string;
   autoPlayOnDisplay?: boolean;
   autoPlayOnFlip?: boolean;
+  onUpdateCard?: (updatedCard: Flashcard) => void;
 }
 
 export const FreeStudyView: React.FC<FreeStudyViewProps> = ({
@@ -34,6 +37,7 @@ export const FreeStudyView: React.FC<FreeStudyViewProps> = ({
   backLanguage = 'en',
   autoPlayOnDisplay = true,
   autoPlayOnFlip = true,
+  onUpdateCard,
 }) => {
   // Free study queue (can be shuffled)
   const [studyList, setStudyList] = useState<Flashcard[]>(() => [...cards]);
@@ -41,10 +45,11 @@ export const FreeStudyView: React.FC<FreeStudyViewProps> = ({
   const [isFlipped, setIsFlipped] = useState(false);
   const [isPlayingPromptAudio, setIsPlayingPromptAudio] = useState(false);
   const [isPlayingAnswerAudio, setIsPlayingAnswerAudio] = useState(false);
+  const [isEditingCard, setIsEditingCard] = useState(false);
 
   const promptAudioTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const answerAudioTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isInitialMountRef = useRef(true);
+  const prevCardIdRef = useRef<string | null>(null);
 
   // Sync if cards change
   useEffect(() => {
@@ -123,14 +128,13 @@ export const FreeStudyView: React.FC<FreeStudyViewProps> = ({
 
   // Auto-play front audio when displaying a new card
   useEffect(() => {
-    if (isInitialMountRef.current) {
-      isInitialMountRef.current = false;
-      return;
-    }
-    if (autoPlayOnDisplay && !isFlipped && promptText) {
+    const isNewCard = prevCardIdRef.current !== currentCard?.id;
+    prevCardIdRef.current = currentCard?.id || null;
+
+    if (isNewCard && autoPlayOnDisplay && !isFlipped && promptText) {
       const timer = setTimeout(() => {
         handlePlayPromptAudio();
-      }, 200);
+      }, 120);
       return () => clearTimeout(timer);
     }
   }, [currentCard?.id, autoPlayOnDisplay, isFlipped, handlePlayPromptAudio, promptText]);
@@ -305,52 +309,58 @@ export const FreeStudyView: React.FC<FreeStudyViewProps> = ({
         className="w-full min-h-[300px] sm:min-h-[340px] bg-white rounded-3xl p-6 sm:p-8 border-2 border-slate-200/90 shadow-sm hover:shadow-md transition-shadow cursor-pointer relative flex flex-col justify-between select-none"
         whileTap={{ scale: 0.995 }}
       >
-        {/* Card Header */}
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-purple-50 text-purple-700 border border-purple-100">
-              Free Study
-            </span>
-            {currentCard.tags && currentCard.tags.length > 0 && (
-              <span className="text-xs font-semibold text-slate-400">
-                #{currentCard.tags[0]}
-              </span>
-            )}
-          </div>
+        {/* Top-Left Anchor Audio Controls (Matches Non-Free Study Mode) */}
+        <div className="absolute top-4 left-4 sm:top-5 sm:left-5 flex items-center gap-1.5 z-10">
+          <button
+            id="free-study-pronounce-prompt-btn"
+            type="button"
+            onClick={handlePlayPromptAudio}
+            title={`Pronounce prompt (${promptLang}) (A)`}
+            className={`h-8 px-2.5 rounded-xl border border-b-2 flex items-center gap-1 transition-all cursor-pointer select-none active:translate-y-0.5 active:border-b ${
+              isPlayingPromptAudio
+                ? 'bg-purple-600 text-white border-purple-700 shadow-xs'
+                : 'bg-slate-50 hover:bg-purple-50 hover:border-purple-200 text-slate-600 hover:text-purple-700 border-slate-200/80'
+            }`}
+          >
+            <Volume2 className={`w-3.5 h-3.5 ${isPlayingPromptAudio ? 'animate-pulse' : ''}`} />
+            <span className="text-[11px] font-bold">Front</span>
+          </button>
 
-          {/* Audio Buttons */}
-          <div className="flex items-center gap-1.5">
+          {isFlipped && (
             <button
+              id="free-study-pronounce-answer-btn"
               type="button"
-              onClick={handlePlayPromptAudio}
-              title={`Pronounce prompt (${promptLang})`}
-              className={`h-8 px-2.5 rounded-xl border border-b-2 flex items-center gap-1 transition-all cursor-pointer ${
-                isPlayingPromptAudio
+              onClick={handlePlayAnswerAudio}
+              title={`Pronounce answer (${answerLang}) (S)`}
+              className={`h-8 px-2.5 rounded-xl border border-b-2 flex items-center gap-1 transition-all cursor-pointer select-none active:translate-y-0.5 active:border-b ${
+                isPlayingAnswerAudio
                   ? 'bg-purple-600 text-white border-purple-700 shadow-xs'
                   : 'bg-slate-50 hover:bg-purple-50 hover:border-purple-200 text-slate-600 hover:text-purple-700 border-slate-200/80'
               }`}
             >
-              <Volume2 className={`w-3.5 h-3.5 ${isPlayingPromptAudio ? 'animate-pulse' : ''}`} />
-              <span className="text-[11px] font-bold">Front</span>
+              <Volume2 className={`w-3.5 h-3.5 ${isPlayingAnswerAudio ? 'animate-pulse' : ''}`} />
+              <span className="text-[11px] font-bold">Back</span>
             </button>
-
-            {isFlipped && (
-              <button
-                type="button"
-                onClick={handlePlayAnswerAudio}
-                title={`Pronounce answer (${answerLang})`}
-                className={`h-8 px-2.5 rounded-xl border border-b-2 flex items-center gap-1 transition-all cursor-pointer ${
-                  isPlayingAnswerAudio
-                    ? 'bg-purple-600 text-white border-purple-700 shadow-xs'
-                    : 'bg-slate-50 hover:bg-purple-50 hover:border-purple-200 text-slate-600 hover:text-purple-700 border-slate-200/80'
-                }`}
-              >
-                <Volume2 className={`w-3.5 h-3.5 ${isPlayingAnswerAudio ? 'animate-pulse' : ''}`} />
-                <span className="text-[11px] font-bold">Back</span>
-              </button>
-            )}
-          </div>
+          )}
         </div>
+
+        {/* Upper-Right Minimal, Low-Profile Quick Edit Button */}
+        {onUpdateCard && currentCard && (
+          <div className="absolute top-4 right-4 sm:top-5 sm:right-5 z-10">
+            <button
+              id="free-study-quick-edit-btn"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsEditingCard(true);
+              }}
+              title="Edit card"
+              className="h-8 w-8 rounded-xl flex items-center justify-center text-slate-300 hover:text-slate-600 hover:bg-slate-100 border border-transparent hover:border-slate-200/80 transition-all cursor-pointer opacity-70 hover:opacity-100"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Center: Prompt & Answer */}
         <div className="my-auto py-6 text-center flex flex-col items-center justify-center">
@@ -461,6 +471,20 @@ export const FreeStudyView: React.FC<FreeStudyViewProps> = ({
           </button>
         )}
       </div>
+
+      {/* Quick Edit Modal */}
+      {isEditingCard && onUpdateCard && currentCard && (
+        <EditCardModal
+          card={currentCard}
+          isOpen={isEditingCard}
+          onClose={() => setIsEditingCard(false)}
+          onSave={(updated) => {
+            onUpdateCard(updated);
+            setStudyList((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+            setIsEditingCard(false);
+          }}
+        />
+      )}
     </div>
   );
 };

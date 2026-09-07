@@ -30,6 +30,9 @@ import {
   saveUserCardsFirestore,
   fetchUserActivityFirestore,
   recordReviewActivityFirestore,
+  fetchUserSettingsFirestore,
+  saveUserSettingsFirestore,
+  UserSettingsFirestore,
 } from './lib/firestoreStorage';
 import {
   getDailyNewCardLimit,
@@ -53,6 +56,17 @@ const BACK_LANG_KEY = 'bleuolingo_back_lang_v1';
 const TARGET_RETENTION_KEY = 'bleuolingo_target_retention_v1';
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  const persistSetting = useCallback(
+    <K extends keyof UserSettingsFirestore>(key: K, value: UserSettingsFirestore[K]) => {
+      if (currentUser) {
+        saveUserSettingsFirestore(currentUser.uid, { [key]: value });
+      }
+    },
+    [currentUser]
+  );
+
   // Navigation tab: 'practice' | 'deck' | 'settings'
   const [activeTab, setActiveTab] = useState<NavigationTab>('practice');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -69,6 +83,7 @@ export default function App() {
       if (typeof window !== 'undefined') {
         localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
       }
+      persistSetting('isSidebarCollapsed', next);
       return next;
     });
   };
@@ -93,6 +108,7 @@ export default function App() {
     if (typeof window !== 'undefined') {
       localStorage.setItem(FRONT_LANG_KEY, lang);
     }
+    persistSetting('frontLanguage', lang);
   };
 
   const handleSelectBackLanguage = (lang: string) => {
@@ -100,6 +116,7 @@ export default function App() {
     if (typeof window !== 'undefined') {
       localStorage.setItem(BACK_LANG_KEY, lang);
     }
+    persistSetting('backLanguage', lang);
   };
 
   // Per-user profiles state (isolated cards, CSV imports, and FSRS progress per user)
@@ -163,9 +180,9 @@ export default function App() {
     if (typeof window !== 'undefined') {
       localStorage.setItem(TARGET_RETENTION_KEY, String(retention));
     }
+    persistSetting('targetRetention', retention);
   };
 
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const effectiveUserId = currentUser ? currentUser.uid : activeUserId;
 
   // Daily new card limit (default 20 cards/day, 0 = No limit)
@@ -176,6 +193,8 @@ export default function App() {
   const handleUpdateDailyNewLimit = (limit: number) => {
     setDailyNewLimit(limit);
     saveDailyNewCardLimit(effectiveUserId, limit);
+    persistSetting('dailyNewLimit', limit);
+    setIsFlipped(false);
   };
 
   // Randomize new cards order preference (default false = deck order)
@@ -186,6 +205,7 @@ export default function App() {
   const handleToggleRandomizeNewCards = (randomize: boolean) => {
     setRandomizeNewCards(randomize);
     saveRandomizeNewCards(effectiveUserId, randomize);
+    persistSetting('randomizeNewCards', randomize);
   };
 
   // Tracking how many new cards have been introduced today
@@ -295,6 +315,62 @@ export default function App() {
             await saveUserCardsFirestore(user.uid, initialDeck);
             setCards(initialDeck);
           }
+
+          // 3. Fetch remote settings and hydrate
+          const cloudSettings = await fetchUserSettingsFirestore(user.uid);
+          if (isMounted) {
+            if (cloudSettings && Object.keys(cloudSettings).length > 0) {
+              if (typeof cloudSettings.frontLanguage === 'string') {
+                setFrontLanguage(cloudSettings.frontLanguage);
+                localStorage.setItem(FRONT_LANG_KEY, cloudSettings.frontLanguage);
+              }
+              if (typeof cloudSettings.backLanguage === 'string') {
+                setBackLanguage(cloudSettings.backLanguage);
+                localStorage.setItem(BACK_LANG_KEY, cloudSettings.backLanguage);
+              }
+              if (typeof cloudSettings.autoPlayOnDisplay === 'boolean') {
+                setAutoPlayOnDisplay(cloudSettings.autoPlayOnDisplay);
+                localStorage.setItem(AUTOPLAY_DISPLAY_KEY, String(cloudSettings.autoPlayOnDisplay));
+              }
+              if (typeof cloudSettings.autoPlayOnFlip === 'boolean') {
+                setAutoPlayOnFlip(cloudSettings.autoPlayOnFlip);
+                localStorage.setItem(AUTOPLAY_FLIP_KEY, String(cloudSettings.autoPlayOnFlip));
+              }
+              if (typeof cloudSettings.isSidesSwapped === 'boolean') {
+                setIsSidesSwapped(cloudSettings.isSidesSwapped);
+                localStorage.setItem(SIDES_SWAPPED_KEY, String(cloudSettings.isSidesSwapped));
+              }
+              if (typeof cloudSettings.targetRetention === 'number') {
+                setTargetRetention(cloudSettings.targetRetention);
+                localStorage.setItem(TARGET_RETENTION_KEY, String(cloudSettings.targetRetention));
+              }
+              if (typeof cloudSettings.dailyNewLimit === 'number') {
+                setDailyNewLimit(cloudSettings.dailyNewLimit);
+                saveDailyNewCardLimit(user.uid, cloudSettings.dailyNewLimit);
+              }
+              if (typeof cloudSettings.randomizeNewCards === 'boolean') {
+                setRandomizeNewCards(cloudSettings.randomizeNewCards);
+                saveRandomizeNewCards(user.uid, cloudSettings.randomizeNewCards);
+              }
+              if (typeof cloudSettings.isSidebarCollapsed === 'boolean') {
+                setIsSidebarCollapsed(cloudSettings.isSidebarCollapsed);
+                localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(cloudSettings.isSidebarCollapsed));
+              }
+            } else {
+              // New cloud user: seed cloud with current user settings
+              await saveUserSettingsFirestore(user.uid, {
+                frontLanguage,
+                backLanguage,
+                autoPlayOnDisplay,
+                autoPlayOnFlip,
+                isSidesSwapped,
+                targetRetention,
+                dailyNewLimit,
+                randomizeNewCards,
+                isSidebarCollapsed,
+              });
+            }
+          }
         } catch (err) {
           console.error('Failed to sync user data from Firestore on login:', err);
         } finally {
@@ -308,6 +384,8 @@ export default function App() {
         if (isMounted) {
           setCards(loadUserCards(activeUserId));
           setActivityLog(loadActivityLog(activeUserId));
+          setDailyNewLimit(getDailyNewCardLimit(activeUserId));
+          setRandomizeNewCards(getRandomizeNewCards(activeUserId));
           setSessionStats({
             totalReviewed: 0,
             againCount: 0,
@@ -414,6 +492,7 @@ export default function App() {
       if (typeof window !== 'undefined') {
         localStorage.setItem(AUTOPLAY_DISPLAY_KEY, String(next));
       }
+      persistSetting('autoPlayOnDisplay', next);
       return next;
     });
   };
@@ -424,6 +503,7 @@ export default function App() {
       if (typeof window !== 'undefined') {
         localStorage.setItem(AUTOPLAY_FLIP_KEY, String(next));
       }
+      persistSetting('autoPlayOnFlip', next);
       return next;
     });
   };
@@ -434,6 +514,7 @@ export default function App() {
       if (typeof window !== 'undefined') {
         localStorage.setItem(SIDES_SWAPPED_KEY, String(next));
       }
+      persistSetting('isSidesSwapped', next);
       return next;
     });
     setIsFlipped(false);
@@ -486,9 +567,9 @@ export default function App() {
   const dueCount = useMemo(
     () =>
       cards.filter(
-        (c) => c.state !== 'new' && (c.due <= now || reviewAheadSet.has(c.id))
+        (c) => c.state !== 'new' && c.due <= now
       ).length,
-    [cards, now, reviewAheadSet]
+    [cards, now]
   );
 
   const cardsDueAheadCount = useMemo(
@@ -518,15 +599,6 @@ export default function App() {
     if (candidateIds.length > 0) {
       setReviewAheadCardIds((prev) => Array.from(new Set([...prev, ...candidateIds])));
       setIsFlipped(false);
-      // Reset session stats for the new review-ahead batch so progress starts cleanly from 0
-      setSessionStats({
-        totalReviewed: 0,
-        againCount: 0,
-        hardCount: 0,
-        goodCount: 0,
-        easyCount: 0,
-        sessionStartTime: Date.now(),
-      });
     }
   }, [cards, now, ONE_DAY_MS, reviewAheadSet]);
 
@@ -806,6 +878,7 @@ export default function App() {
                 backLanguage={backLanguage}
                 autoPlayOnDisplay={autoPlayOnDisplay}
                 autoPlayOnFlip={autoPlayOnFlip}
+                onUpdateCard={handleUpdateCard}
               />
             ) : (
               <>
@@ -841,7 +914,6 @@ export default function App() {
                 <div className="flex-1 flex flex-col justify-start mt-1 sm:mt-2">
                   {currentCard ? (
                     <FlashcardView
-                      key={currentCard.id}
                       card={currentCard}
                       isFlipped={isFlipped}
                       onFlip={() => setIsFlipped(true)}
@@ -918,6 +990,7 @@ export default function App() {
             randomizeNewCards={randomizeNewCards}
             onToggleRandomizeNewCards={handleToggleRandomizeNewCards}
             onResetToDefault={handleResetToDefault}
+            isCloudSynced={!!currentUser}
           />
         )}
       </main>

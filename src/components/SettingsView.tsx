@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings as SettingsIcon,
   AlertTriangle,
@@ -10,6 +10,7 @@ import {
   X,
   Clock,
   BookOpen,
+  Cloud,
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { ActivityLog } from '../lib/activityStorage';
@@ -29,6 +30,7 @@ interface SettingsViewProps {
   randomizeNewCards?: boolean;
   onToggleRandomizeNewCards?: (randomize: boolean) => void;
   onResetToDefault: () => void;
+  isCloudSynced?: boolean;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -46,11 +48,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   randomizeNewCards = false,
   onToggleRandomizeNewCards,
   onResetToDefault,
+  isCloudSynced = false,
 }) => {
   // Safety confirmation modal state for Reset to Starter Deck
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [confirmInputText, setConfirmInputText] = useState('');
   const [resetSuccessMessage, setResetSuccessMessage] = useState<string | null>(null);
+
+  // Local state for daily limit input to allow deleting "0" cleanly without forcing "03"
+  const [dailyLimitStr, setDailyLimitStr] = useState<string>(() => String(dailyNewLimit));
+
+  useEffect(() => {
+    setDailyLimitStr(String(dailyNewLimit));
+  }, [dailyNewLimit]);
 
   const handleExecuteResetToDefault = () => {
     onResetToDefault();
@@ -65,7 +75,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   return (
     <div id="settings-view" className="w-full max-w-3xl mx-auto px-4 py-6 sm:py-8 flex flex-col gap-6">
       {/* Header */}
-      <div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
             <SettingsIcon className="w-5 h-5" />
@@ -79,6 +89,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </p>
           </div>
         </div>
+
+        {isCloudSynced && (
+          <div className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200/80 text-blue-700 text-xs font-bold">
+            <Cloud className="w-3.5 h-3.5 text-blue-500" />
+            <span>Firebase Cloud Sync Active</span>
+          </div>
+        )}
       </div>
 
       {/* Success Notification */}
@@ -177,13 +194,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="flex items-center gap-2">
             <input
               id="settings-daily-new-limit-input"
-              type="number"
-              min="0"
-              max="500"
-              value={dailyNewLimit}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={dailyLimitStr}
+              placeholder="0"
               onChange={(e) => {
-                const parsed = parseInt(e.target.value, 10);
-                onUpdateDailyNewLimit?.(isNaN(parsed) || parsed < 0 ? 0 : parsed);
+                const val = e.target.value;
+                if (val === '') {
+                  setDailyLimitStr('');
+                  onUpdateDailyNewLimit?.(0);
+                  return;
+                }
+                if (/^\d+$/.test(val)) {
+                  const parsed = parseInt(val, 10);
+                  const clamped = Math.min(parsed, 500);
+                  setDailyLimitStr(String(clamped));
+                  onUpdateDailyNewLimit?.(clamped);
+                }
+              }}
+              onBlur={() => {
+                if (dailyLimitStr === '') {
+                  setDailyLimitStr('0');
+                  onUpdateDailyNewLimit?.(0);
+                }
               }}
               className="w-24 px-3 py-2 rounded-xl border border-slate-200 text-sm font-black text-center text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />

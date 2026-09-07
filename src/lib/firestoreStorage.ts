@@ -96,3 +96,49 @@ export async function appendOrUpdateUserCardsFirestore(
 
     return completeDeck;
 }
+
+export interface UserSettingsFirestore {
+    frontLanguage?: string;
+    backLanguage?: string;
+    autoPlayOnDisplay?: boolean;
+    autoPlayOnFlip?: boolean;
+    isSidesSwapped?: boolean;
+    targetRetention?: number;
+    dailyNewLimit?: number;
+    randomizeNewCards?: boolean;
+    isSidebarCollapsed?: boolean;
+}
+
+export async function fetchUserSettingsFirestore(uid: string): Promise<UserSettingsFirestore | null> {
+    try {
+        const settingsDocRef = doc(db, 'users', uid, 'data', 'settings');
+        const snap = await getDoc(settingsDocRef);
+        if (snap.exists()) {
+            return snap.data() as UserSettingsFirestore;
+        }
+        return null;
+    } catch (err) {
+        console.error('Failed to load settings from Firestore:', err);
+        return null;
+    }
+}
+
+export async function saveUserSettingsFirestore(
+    uid: string,
+    settings: Partial<UserSettingsFirestore>
+): Promise<void> {
+    try {
+        const settingsDocRef = doc(db, 'users', uid, 'data', 'settings');
+        await setDoc(
+            settingsDocRef,
+            {
+                ...settings,
+                updatedAt: Date.now(),
+            },
+            { merge: true }
+        );
+        console.log('Settings successfully saved to Firestore');
+    } catch (err) {
+        console.error('Failed to save settings to Firestore:', err);
+    }
+}

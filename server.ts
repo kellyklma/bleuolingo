@@ -76,9 +76,24 @@ async function startServer() {
       const arrayBuffer = await ttsResponse.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
+      res.setHeader("Accept-Ranges", "bytes");
+      res.setHeader("Cache-Control", "public, max-age=86400, immutable");
+
+      const rangeHeader = req.headers.range;
+      if (rangeHeader) {
+        const parts = rangeHeader.replace(/bytes=/, "").split("-");
+        const start = parseInt(parts[0], 10) || 0;
+        const end = parts[1] ? parseInt(parts[1], 10) : buffer.length - 1;
+        const chunk = buffer.subarray(start, end + 1);
+        res.status(206);
+        res.setHeader("Content-Range", `bytes ${start}-${end}/${buffer.length}`);
+        res.setHeader("Content-Length", chunk.length);
+        res.setHeader("Content-Type", "audio/mpeg");
+        return res.send(chunk);
+      }
+
       res.setHeader("Content-Type", "audio/mpeg");
       res.setHeader("Content-Length", buffer.length);
-      res.setHeader("Cache-Control", "public, max-age=86400, immutable");
       return res.send(buffer);
     } catch (error) {
       console.error("Error generating TTS audio:", error);

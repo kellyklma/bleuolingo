@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Volume2 } from 'lucide-react';
+import { Volume2, Pencil } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Flashcard, ReviewRating } from '../types';
 import { getFSRSOptions } from '../lib/fsrs';
-import { playPronunciation } from '../lib/audio';
+import { playPronunciation, stopPronunciation } from '../lib/audio';
+import { EditCardModal } from './EditCardModal';
 
 interface FlashcardViewProps {
   card: Flashcard;
@@ -31,10 +32,13 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
   frontLanguage = 'fr',
   backLanguage = 'en',
   targetRetention = 0.9,
+  onDeleteCard,
+  onUpdateCard,
 }) => {
   const [isPlayingPromptAudio, setIsPlayingPromptAudio] = useState(false);
   const [isPlayingAnswerAudio, setIsPlayingAnswerAudio] = useState(false);
-  const isInitialMountRef = useRef(true);
+  const [isEditingCard, setIsEditingCard] = useState(false);
+  const prevCardIdRef = useRef<string | null>(null);
   const promptAudioTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const answerAudioTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -45,6 +49,7 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
   const promptLang = isSidesSwapped ? backLanguage : frontLanguage;
   const answerLang = isSidesSwapped ? frontLanguage : backLanguage;
 
+  // Cleanup on unmount or card switch
   useEffect(() => {
     if (promptAudioTimeoutRef.current) clearTimeout(promptAudioTimeoutRef.current);
     if (answerAudioTimeoutRef.current) clearTimeout(answerAudioTimeoutRef.current);
@@ -54,6 +59,7 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
     return () => {
       if (promptAudioTimeoutRef.current) clearTimeout(promptAudioTimeoutRef.current);
       if (answerAudioTimeoutRef.current) clearTimeout(answerAudioTimeoutRef.current);
+      stopPronunciation();
     };
   }, [card.id, isFlipped]);
 
@@ -103,21 +109,28 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
     [answerText, answerLang]
   );
 
+  // Auto-play front audio when displaying a new card
   useEffect(() => {
-    if (isInitialMountRef.current) {
-      isInitialMountRef.current = false;
-      return;
-    }
-    if (autoPlayOnDisplay) {
-      handlePlayPromptAudio();
-    }
-  }, [card.id, autoPlayOnDisplay, handlePlayPromptAudio]);
+    const isNewCard = prevCardIdRef.current !== card.id;
+    prevCardIdRef.current = card.id;
 
-  useEffect(() => {
-    if (autoPlayOnFlip && isFlipped) {
-      handlePlayAnswerAudio();
+    if (isNewCard && autoPlayOnDisplay && promptText) {
+      const timer = setTimeout(() => {
+        handlePlayPromptAudio();
+      }, 120);
+      return () => clearTimeout(timer);
     }
-  }, [isFlipped, autoPlayOnFlip, handlePlayAnswerAudio]);
+  }, [card.id, autoPlayOnDisplay, handlePlayPromptAudio, promptText]);
+
+  // Auto-play answer audio when flipped
+  useEffect(() => {
+    if (autoPlayOnFlip && isFlipped && answerText) {
+      const timer = setTimeout(() => {
+        handlePlayAnswerAudio();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isFlipped, autoPlayOnFlip, handlePlayAnswerAudio, answerText]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -164,11 +177,9 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
       {/* Flashcard Container */}
       <motion.div
         id="flashcard-main-container"
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.15 }}
         onClick={() => !isFlipped && onFlip()}
-        className={`w-full min-h-[290px] sm:min-h-[320px] bg-white rounded-[28px] p-6 sm:p-8 flex flex-col justify-between border-2 border-slate-200/90 border-b-4 transition-all cursor-pointer relative shadow-[0_12px_36px_rgba(0,0,0,0.05)] ${
+        whileTap={{ scale: 0.995 }}
+        className={`w-full min-h-[290px] sm:min-h-[320px] bg-white rounded-[28px] p-6 sm:p-8 flex flex-col justify-between border-2 border-slate-200/90 border-b-4 transition-colors duration-150 cursor-pointer relative shadow-[0_12px_36px_rgba(0,0,0,0.05)] ${
           isFlipped ? 'border-blue-400/90' : 'hover:border-blue-300'
         }`}
       >
@@ -208,6 +219,24 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
             </button>
           )}
         </div>
+
+        {/* Upper-Right Minimal, Low-Profile Quick Edit Button */}
+        {onUpdateCard && (
+          <div className="absolute top-4 right-4 sm:top-5 sm:right-5 z-10">
+            <button
+              id="flashcard-quick-edit-btn"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsEditingCard(true);
+              }}
+              title="Edit card"
+              className="h-8 w-8 rounded-xl flex items-center justify-center text-slate-300 hover:text-slate-600 hover:bg-slate-100 border border-transparent hover:border-slate-200/80 transition-all cursor-pointer opacity-70 hover:opacity-100"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Center: Clean, perfectly centered Prompt & Answer */}
         <div className="my-auto py-8 text-center flex flex-col items-center justify-center">
@@ -301,6 +330,19 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Quick Edit Modal */}
+      {isEditingCard && onUpdateCard && (
+        <EditCardModal
+          card={card}
+          isOpen={isEditingCard}
+          onClose={() => setIsEditingCard(false)}
+          onSave={(updated) => {
+            onUpdateCard(updated);
+            setIsEditingCard(false);
+          }}
+        />
+      )}
     </div>
   );
 };
