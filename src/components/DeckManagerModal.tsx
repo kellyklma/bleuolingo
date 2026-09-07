@@ -207,6 +207,8 @@ export const DeckManagerModal: React.FC<DeckManagerModalProps> = ({
                         className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
                           card.state === 'new'
                             ? 'bg-blue-100 text-blue-700'
+                            : card.state === 'relearning'
+                            ? 'bg-rose-100 text-rose-700'
                             : card.state === 'learning'
                             ? 'bg-amber-100 text-amber-700'
                             : isDue

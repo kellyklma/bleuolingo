@@ -86,6 +86,14 @@ async function startServer() {
     }
   });
 
+  // Rewrite /bleuolingo prefix if accessed via GitHub Pages path structure
+  app.use((req, _res, next) => {
+    if (req.url.startsWith('/bleuolingo')) {
+      req.url = req.url.replace(/^\/bleuolingo/, '') || '/';
+    }
+    next();
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

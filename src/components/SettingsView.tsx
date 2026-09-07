@@ -24,6 +24,8 @@ interface SettingsViewProps {
   onToggleAutoPlayOnDisplay: () => void;
   autoPlayOnFlip: boolean;
   onToggleAutoPlayOnFlip: () => void;
+  targetRetention?: number;
+  onUpdateTargetRetention?: (retention: number) => void;
   onResetAllDue: () => void;
   onResetToDefault: () => void;
 }
@@ -36,6 +38,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onToggleAutoPlayOnDisplay,
   autoPlayOnFlip,
   onToggleAutoPlayOnFlip,
+  targetRetention = 0.9,
+  onUpdateTargetRetention,
   onResetAllDue,
   onResetToDefault,
 }) => {
@@ -174,6 +178,49 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-100/90 text-blue-800 border border-blue-200/60">
             Safe • Non-Destructive
           </span>
+        </div>
+
+        {/* Target Retention Selector */}
+        <div className="flex flex-col gap-2 pt-1 pb-3 border-b border-blue-100">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-extrabold text-slate-800">
+              FSRS Target Retention
+            </span>
+            <span className="text-xs font-black text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md">
+              {Math.round(targetRetention * 100)}% Recall Probability
+            </span>
+          </div>
+          <p className="text-xs text-slate-600 font-medium">
+            Determines how aggressively intervals expand. Lower retention spaces cards out further with fewer reviews; higher retention schedules reviews more frequently for maximum recall.
+          </p>
+
+          <div className="grid grid-cols-3 gap-2 mt-1">
+            {[
+              { value: 0.85, label: '85%', desc: 'Relaxed' },
+              { value: 0.90, label: '90%', desc: 'Standard' },
+              { value: 0.95, label: '95%', desc: 'Intensive' },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => onUpdateTargetRetention?.(opt.value)}
+                className={`py-2 px-3 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center ${
+                  Math.abs(targetRetention - opt.value) < 0.01
+                    ? 'bg-blue-600 border-blue-700 text-white shadow-xs font-bold'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 font-medium'
+                }`}
+              >
+                <span className="text-sm font-black">{opt.label}</span>
+                <span
+                  className={`text-[10px] uppercase font-bold tracking-wider ${
+                    Math.abs(targetRetention - opt.value) < 0.01 ? 'text-blue-100' : 'text-slate-400'
+                  }`}
+                >
+                  {opt.desc}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 pt-1">

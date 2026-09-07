@@ -66,6 +66,7 @@ export const AddCardModal: React.FC<AddCardModalProps> = ({
       difficulty: 5.0,
       reps: 0,
       lapses: 0,
+      lastReview: undefined,
       due: now,
     };
 

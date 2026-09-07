@@ -17,6 +17,8 @@ interface DedupReviewModalProps {
   conflicts: DuplicateConflict[];
   onClose: () => void;
   onApply: (conflicts: DuplicateConflict[]) => void;
+  newCardsCount?: number;
+  filename?: string;
 }
 
 export const DedupReviewModal: React.FC<DedupReviewModalProps> = ({
@@ -24,6 +26,8 @@ export const DedupReviewModal: React.FC<DedupReviewModalProps> = ({
   conflicts: initialConflicts,
   onClose,
   onApply,
+  newCardsCount,
+  filename,
 }) => {
   const [conflicts, setConflicts] = useState<DuplicateConflict[]>(initialConflicts);
   const [mode, setMode] = useState<'prompt' | 'step' | 'list'>('prompt');

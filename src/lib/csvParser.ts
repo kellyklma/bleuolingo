@@ -139,6 +139,7 @@ export function convertRowsToFlashcards(
       difficulty: 5.0,
       reps: 0,
       lapses: 0,
+      lastReview: undefined,
       due: now,
     });
   });

@@ -128,7 +128,10 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
   // Counts for filters
   const dueCount = useMemo(() => cards.filter((c) => c.due <= now).length, [cards, now]);
   const newCount = useMemo(() => cards.filter((c) => c.state === 'new').length, [cards]);
-  const learningCount = useMemo(() => cards.filter((c) => c.state === 'learning').length, [cards]);
+  const learningCount = useMemo(
+    () => cards.filter((c) => c.state === 'learning' || c.state === 'relearning').length,
+    [cards]
+  );
   const reviewCount = useMemo(() => cards.filter((c) => c.state === 'review').length, [cards]);
 
   // Toggle multiselect hashtag
@@ -258,6 +261,7 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
 
       if (filterState === 'all') return true;
       if (filterState === 'due') return c.due <= now;
+      if (filterState === 'learning') return c.state === 'learning' || c.state === 'relearning';
       return c.state === filterState;
     });
   }, [cards, searchQuery, selectedTags, filterState, now]);
@@ -277,7 +281,7 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
         const bTags = (b.tags || []).join(', ');
         cmp = aTags.localeCompare(bTags);
       } else if (sortField === 'status') {
-        const stateWeight: Record<string, number> = { new: 1, learning: 2, review: 3 };
+        const stateWeight: Record<string, number> = { new: 1, learning: 2, relearning: 2, review: 3 };
         cmp = (stateWeight[a.state] || 0) - (stateWeight[b.state] || 0);
       } else if (sortField === 'interval') {
         cmp = a.due - b.due;
@@ -1016,12 +1020,15 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
                       {visibleColumns.status && (
                         <td className="py-3 px-4">
                           <span
-                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider ${c.state === 'review'
+                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider ${
+                              c.state === 'review'
                                 ? 'bg-emerald-100 text-emerald-800'
-                                : c.state === 'learning'
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-blue-100 text-blue-800'
-                              }`}
+                                : c.state === 'relearning'
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : c.state === 'learning'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-blue-100 text-blue-800'
+                            }`}
                           >
                             {c.state}
                           </span>

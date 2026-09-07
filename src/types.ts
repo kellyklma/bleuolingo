@@ -1,4 +1,11 @@
-export type CardState = 'new' | 'learning' | 'review';
+export type CardState = 'new' | 'learning' | 'review' | 'relearning';
+
+export enum FSRSState {
+  New = 0,
+  Learning = 1,
+  Review = 2,
+  Relearning = 3,
+}
 
 export type ReviewRating = 1 | 2 | 3 | 4; // 1: Again, 2: Hard, 3: Good, 4: Easy
 
@@ -21,6 +28,7 @@ export interface Flashcard {
   reps: number;
   lapses: number;
   lastReview?: number; // timestamp (ms)
+  last_review?: number; // optional alias for external snake_case dataset compatibility
   due: number; // timestamp (ms)
 }
 

@@ -36,6 +36,7 @@ const SIDES_SWAPPED_KEY = 'bleuolingo_sides_swapped_v1';
 const SIDEBAR_COLLAPSED_KEY = 'bleuolingo_sidebar_collapsed_v1';
 const FRONT_LANG_KEY = 'bleuolingo_front_lang_v1';
 const BACK_LANG_KEY = 'bleuolingo_back_lang_v1';
+const TARGET_RETENTION_KEY = 'bleuolingo_target_retention_v1';
 
 export default function App() {
   // Navigation tab: 'practice' | 'deck' | 'settings'
@@ -130,6 +131,25 @@ export default function App() {
     }
     return false;
   });
+
+  // FSRS Target Retention preference (default 90% / 0.90)
+  const [targetRetention, setTargetRetention] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(TARGET_RETENTION_KEY);
+      if (saved) {
+        const val = parseFloat(saved);
+        if (!isNaN(val) && val >= 0.7 && val <= 0.98) return val;
+      }
+    }
+    return 0.9;
+  });
+
+  const handleUpdateTargetRetention = (retention: number) => {
+    setTargetRetention(retention);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(TARGET_RETENTION_KEY, String(retention));
+    }
+  };
 
   // Active card flipping state
   const [isFlipped, setIsFlipped] = useState(false);
@@ -342,7 +362,7 @@ export default function App() {
   const learningCards = useMemo(
     () =>
       cards
-        .filter((c) => c.state === 'learning' && (practiceAhead || c.due <= now))
+        .filter((c) => (c.state === 'learning' || c.state === 'relearning') && (practiceAhead || c.due <= now))
         .sort((a, b) => a.due - b.due),
     [cards, now, practiceAhead]
   );
@@ -376,7 +396,7 @@ export default function App() {
       else if (rating === 1) setMascotMood('thinking');
       else setMascotMood('happy');
 
-      const updatedProps = calculateNextFSRSState(activeCard, rating, Date.now());
+      const updatedProps = calculateNextFSRSState(activeCard, rating, Date.now(), targetRetention);
       const updatedCard: Flashcard = { ...activeCard, ...updatedProps };
 
       setCards((prevCards) => {
@@ -415,7 +435,7 @@ export default function App() {
 
       setIsFlipped(false);
     },
-    [currentCard, currentUser, activeUserId]
+    [currentCard, currentUser, activeUserId, targetRetention]
   );
 
   // -------------------------------------------------------------
@@ -642,6 +662,7 @@ export default function App() {
                   isSidesSwapped={isSidesSwapped}
                   frontLanguage={frontLanguage}
                   backLanguage={backLanguage}
+                  targetRetention={targetRetention}
                   onDeleteCard={handleDeleteCard}
                   onUpdateCard={handleUpdateCard}
                 />
@@ -686,6 +707,8 @@ export default function App() {
             onToggleAutoPlayOnDisplay={toggleAutoPlayOnDisplay}
             autoPlayOnFlip={autoPlayOnFlip}
             onToggleAutoPlayOnFlip={toggleAutoPlayOnFlip}
+            targetRetention={targetRetention}
+            onUpdateTargetRetention={handleUpdateTargetRetention}
             onResetAllDue={handleResetAllDue}
             onResetToDefault={handleResetToDefault}
           />

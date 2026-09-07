@@ -15,6 +15,7 @@ interface FlashcardViewProps {
   isSidesSwapped: boolean;
   frontLanguage?: string;
   backLanguage?: string;
+  targetRetention?: number;
   onDeleteCard?: (id: string) => void;
   onUpdateCard?: (updatedCard: Flashcard) => void;
 }
@@ -29,6 +30,7 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
   isSidesSwapped,
   frontLanguage = 'fr',
   backLanguage = 'en',
+  targetRetention = 0.9,
 }) => {
   const [isPlayingPromptAudio, setIsPlayingPromptAudio] = useState(false);
   const [isPlayingAnswerAudio, setIsPlayingAnswerAudio] = useState(false);
@@ -36,7 +38,7 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
   const promptAudioTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const answerAudioTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fsrsOptions = getFSRSOptions(card);
+  const fsrsOptions = getFSRSOptions(card, Date.now(), targetRetention);
 
   const promptText = isSidesSwapped ? card.back : card.front;
   const answerText = isSidesSwapped ? card.front : card.back;
