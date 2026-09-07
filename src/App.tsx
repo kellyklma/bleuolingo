@@ -254,7 +254,6 @@ export default function App() {
     };
   }, [activeUserId]);
 
-  // Switch learner profile (guest mode)
   const handleSelectUser = (userId: string) => {
     if (userId === activeUserId) return;
     saveUserCards(activeUserId, cards);

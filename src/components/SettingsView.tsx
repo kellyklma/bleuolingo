@@ -273,7 +273,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               Reset to Starter Deck
             </div>
             <p className="text-xs text-slate-600 font-medium mt-0.5 max-w-lg">
-              Safely protected: Replaces all cards in the current learner profile with the original 10 starter cards. All custom created cards and CSV imports for this profile will be permanently removed.
+              Replaces all cards with the original 8 starter cards. All custom created cards and CSV imports for this account will be permanently removed.
             </p>
           </div>
 
