@@ -61,7 +61,6 @@ tu as,you have,phrase
 un fils,a son,word
 une sœur,a sister,word
 une fille,a daughter,word
-j'ai,i have,phrase
 elle vient,she comes,phrase
 une tante,an aunt,word
 un oncle,an uncle,word
@@ -84,3 +83,15 @@ mon fils,my son,phrase
 mon frère,my brother,phrase
 mais,but,word
 pas du tout,not at all,phrase
+je suis,i am,phrase
+tu es,"you are (singular, informal)",phrase
+il / elle / on est,he / she / we are (informal),phrase
+nous sommes,we are (formal),phrase
+vous êtes,"you are (plural, formal)",phrase
+"ils / elles sont (""sohn"")",they are,phrase
+j'ai,i have,phrase
+tu as,"you have (singular, informal)",phrase
+il / elle / on a,he / she / we have (informal),phrase
+nous avons,we have (formal),phrase
+vous avez,"you have (plural, formal)",phrase
+"ils / elles ont (""zohn"")",they have,phrase
