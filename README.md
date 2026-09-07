@@ -16,3 +16,4 @@ A minimalist flashcard web app using Free Spaced Repetition Scheduler algorithm.
 - Undo import
 - Study by tag
 - Support editing flash card in study mode
+- Simplify the overwrite UI
