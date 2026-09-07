@@ -498,7 +498,7 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
               <span className="text-blue-600 underline">browse files</span>
             </div>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Format: <code className="px-1 py-0.5 rounded bg-slate-100 font-mono font-bold text-blue-700 text-[11px]">front,back,tags</code> (e.g. <span className="font-mono text-[11px] text-slate-600">bonjour,hello,greetings</span>)
+              Format: <code className="px-1 py-0.5 rounded bg-slate-100 font-mono font-bold text-blue-700 text-[11px]">front,back,tags</code> (e.g. <span className="font-mono text-[11px] text-slate-600">bonjour,hello,greetings;french</span>)
             </p>
           </div>
         </div>
@@ -515,7 +515,7 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
             title="Download sample CSV template format"
           >
             <Download className="w-3 h-3" />
-            <span>Sample CSV</span>
+            <span>Download sample CSV</span>
           </button>
         </div>
       </div>
