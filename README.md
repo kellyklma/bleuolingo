@@ -4,6 +4,7 @@ A minimalist flashcard web app using Free Spaced Repetition Scheduler algorithm.
 
 ## Known issues, highest to lowest priority
 - Verify FSRS algo fully functional
+- Daily focus progress bar not at 100% even though all due cards were reviewed
 - UI flicker when changing cards
 - Bleuolingo speech bubble is outside viewport
 - Poor placement / UI for audio language change
