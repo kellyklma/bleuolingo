@@ -187,13 +187,13 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           )}
         </div>
 
-        {/* Daily Focus Card (Above Study Tab) */}
+        {/* Daily Progress Card */}
         {!isCollapsed && (
           <div className="rounded-2xl bg-gradient-to-b from-slate-50 to-blue-50/40 border border-slate-200/80 p-3.5 flex flex-col gap-2.5">
             <div className="flex items-center justify-between text-xs">
               <span className="font-bold text-slate-500 flex items-center gap-1.5">
                 <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                Daily Focus
+                Daily Progress
               </span>
               <span className="font-black text-blue-600">
                 {reviewedCount} reviewed
@@ -218,8 +218,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               />
             </div>
 
-            <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium pt-0.5">
-              <span>Deck: {totalCards} cards</span>
+            <div className="flex items-center justify-end text-[11px] text-slate-500 font-medium pt-0.5">
               <span className={dueCount > 0 ? 'text-amber-600 font-bold' : 'text-emerald-600 font-bold'}>
                 {dueCount} due
               </span>

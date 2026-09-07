@@ -299,7 +299,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               Reset to Starter Deck
             </h4>
             <p className="text-xs text-rose-700/80 font-medium mt-0.5 leading-relaxed">
-              Replace current profile cards with the clean French starter deck. This action cannot be undone.
+              Replace current cards with the starter deck. This action cannot be undone.
             </p>
           </div>
 
