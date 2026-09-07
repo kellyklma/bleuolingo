@@ -1,25 +1,35 @@
 import React from 'react';
-import { RotateCw, PlusCircle } from 'lucide-react';
+import { Clock, Plus, BookOpen, Sparkles, CheckCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { SessionStats } from '../types';
 import { BleuoMascot } from './BleuoMascot';
 
 interface SessionCompleteProps {
   stats: SessionStats;
-  onPracticeAll: () => void;
-  onOpenUpload: () => void;
+  onReviewAhead: () => void;
+  cardsDueAheadCount: number;
+  onAddTodayOverride?: (count: number) => void;
+  unintroducedNewCardsCount?: number;
+  newCardsIntroducedToday?: number;
+  dailyNewLimit?: number;
+  onStartFreeStudy: () => void;
   onRestartSession: () => void;
 }
 
 export const SessionComplete: React.FC<SessionCompleteProps> = ({
   stats,
-  onPracticeAll,
-  onOpenUpload,
-  onRestartSession,
+  onReviewAhead,
+  cardsDueAheadCount = 0,
+  onAddTodayOverride,
+  unintroducedNewCardsCount = 0,
+  newCardsIntroducedToday = 0,
+  dailyNewLimit = 0,
+  onStartFreeStudy,
 }) => {
   const total = stats.totalReviewed;
   const recalled = stats.goodCount + stats.easyCount;
   const accuracyPercent = total > 0 ? Math.round((recalled / total) * 100) : 100;
+  const newCardsBatchCount = Math.min(5, unintroducedNewCardsCount);
 
   return (
     <motion.div
@@ -29,8 +39,8 @@ export const SessionComplete: React.FC<SessionCompleteProps> = ({
       transition={{ duration: 0.3 }}
       className="w-full max-w-xl mx-auto px-4 py-8"
     >
-      <div className="bg-white rounded-3xl p-8 border-2 border-blue-100 shadow-xl text-center relative overflow-hidden">
-        {/* Playful Cheering Bleuo Mascot */}
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border-2 border-blue-100 shadow-xl text-center relative overflow-hidden">
+        {/* Mascot */}
         <div className="flex justify-center mb-3">
           <BleuoMascot mood="cheering" size="lg" />
         </div>
@@ -39,7 +49,7 @@ export const SessionComplete: React.FC<SessionCompleteProps> = ({
           Session Complete!
         </h2>
         <p className="text-sm font-semibold text-slate-500 mt-1 max-w-sm mx-auto">
-          You're all caught up for now!
+          You&apos;re completely caught up on your scheduled reviews for now.
         </p>
 
         {/* Stats Grid */}
@@ -55,7 +65,7 @@ export const SessionComplete: React.FC<SessionCompleteProps> = ({
           <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
             <span className="text-[11px] font-black text-emerald-700 uppercase tracking-wider block">Recall Rate</span>
             <span className="text-2xl font-black text-emerald-900">{accuracyPercent}%</span>
-            <span className="text-[11px] font-semibold text-emerald-600 block mt-0.5">Good & Easy</span>
+            <span className="text-[11px] font-semibold text-emerald-600 block mt-0.5">Good &amp; Easy</span>
           </div>
 
           {/* FSRS Learning Distribution */}
@@ -79,27 +89,59 @@ export const SessionComplete: React.FC<SessionCompleteProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2">
-          {/* Practice Ahead */}
-          <button
-            id="practice-ahead-btn"
-            type="button"
-            onClick={onPracticeAll}
-            className="w-full sm:w-auto px-5 py-3.5 rounded-2xl bg-blue-500 hover:bg-blue-600 border-b-4 border-blue-700 active:border-b-0 active:translate-y-1 text-white font-black text-xs flex items-center justify-center gap-2 shadow-md shadow-blue-500/25 transition-all cursor-pointer"
-          >
-            <RotateCw className="w-4 h-4" />
-            <span>Practice Ahead</span>
-          </button>
+        <div className="flex flex-col gap-2.5 pt-2">
+          {/* Top row: Clean Minimalist Review Ahead & Single Add New Cards Button */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5">
+            {/* Cleaner Review Ahead button keeping # cards expected to add */}
+            <button
+              id="review-ahead-btn"
+              type="button"
+              onClick={onReviewAhead}
+              disabled={cardsDueAheadCount === 0}
+              className={`w-full sm:flex-1 px-4 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors ${
+                cardsDueAheadCount > 0
+                  ? 'border border-blue-200 bg-blue-50/80 hover:bg-blue-100/90 text-blue-700 shadow-2xs cursor-pointer'
+                  : 'border border-slate-100 bg-slate-50 text-slate-400 cursor-not-allowed'
+              }`}
+              title={
+                cardsDueAheadCount > 0
+                  ? `Review ${cardsDueAheadCount} card${cardsDueAheadCount === 1 ? '' : 's'} scheduled within the next 24 hours`
+                  : 'No reviews due within the next 24 hours'
+              }
+            >
+              <Clock className="w-3.5 h-3.5 shrink-0" />
+              <span>Review Ahead ({cardsDueAheadCount})</span>
+            </button>
 
-          {/* Upload More Flashcards */}
+            {/* Single minimalist button to add new cards */}
+            {unintroducedNewCardsCount > 0 && onAddTodayOverride ? (
+              <button
+                id="session-complete-add-today-new-btn"
+                type="button"
+                onClick={() => onAddTodayOverride(newCardsBatchCount)}
+                className="w-full sm:flex-1 px-4 py-2.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                title={`Unlock ${newCardsBatchCount} more new card${newCardsBatchCount === 1 ? '' : 's'} today in excess of daily limit`}
+              >
+                <Plus className="w-3.5 h-3.5 text-slate-500 stroke-[2.5]" />
+                <span>Add New Cards (+{newCardsBatchCount})</span>
+              </button>
+            ) : (
+              <div className="w-full sm:flex-1 py-2.5 px-4 rounded-xl border border-slate-100 bg-slate-50 text-slate-400 font-medium text-xs flex items-center justify-center gap-1.5 select-none">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                <span>All New Cards Studied</span>
+              </div>
+            )}
+          </div>
+
+          {/* Minimalist Free-Study Mode Option */}
           <button
-            id="upload-more-cards-btn"
+            id="session-complete-free-study-btn"
             type="button"
-            onClick={onOpenUpload}
-            className="w-full sm:w-auto px-4 py-3.5 rounded-2xl bg-white hover:bg-slate-50 border-2 border-slate-200 active:bg-slate-100 text-slate-700 font-extrabold text-xs flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+            onClick={onStartFreeStudy}
+            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 hover:border-purple-200 bg-white hover:bg-purple-50/40 text-slate-600 hover:text-purple-700 font-bold text-xs flex items-center justify-center gap-2 shadow-2xs transition-colors cursor-pointer"
           >
-            <PlusCircle className="w-4 h-4 text-blue-500" />
-            <span>Add Cards</span>
+            <BookOpen className="w-3.5 h-3.5 text-purple-600" />
+            <span>Free-Study Mode (Bypass Scheduling)</span>
           </button>
         </div>
       </div>

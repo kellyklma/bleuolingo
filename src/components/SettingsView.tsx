@@ -6,15 +6,13 @@ import {
   Volume2,
   VolumeX,
   ShieldAlert,
-  Check,
   CheckCircle2,
   X,
-  Sparkles,
-  User,
+  Clock,
+  BookOpen,
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { ActivityLog } from '../lib/activityStorage';
-import { ProgressHeatmap } from './ProgressHeatmap';
 
 interface SettingsViewProps {
   activeProfile?: UserProfile;
@@ -26,7 +24,10 @@ interface SettingsViewProps {
   onToggleAutoPlayOnFlip: () => void;
   targetRetention?: number;
   onUpdateTargetRetention?: (retention: number) => void;
-  onResetAllDue: () => void;
+  dailyNewLimit?: number;
+  onUpdateDailyNewLimit?: (limit: number) => void;
+  randomizeNewCards?: boolean;
+  onToggleRandomizeNewCards?: (randomize: boolean) => void;
   onResetToDefault: () => void;
 }
 
@@ -40,14 +41,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onToggleAutoPlayOnFlip,
   targetRetention = 0.9,
   onUpdateTargetRetention,
-  onResetAllDue,
+  dailyNewLimit = 10,
+  onUpdateDailyNewLimit,
+  randomizeNewCards = false,
+  onToggleRandomizeNewCards,
   onResetToDefault,
 }) => {
   // Safety confirmation modal state for Reset to Starter Deck
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [confirmInputText, setConfirmInputText] = useState('');
   const [resetSuccessMessage, setResetSuccessMessage] = useState<string | null>(null);
-  const [isJustQueuedDue, setIsJustQueuedDue] = useState(false);
 
   const handleExecuteResetToDefault = () => {
     onResetToDefault();
@@ -59,18 +62,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }, 4000);
   };
 
-  const handleMakeAllDue = () => {
-    onResetAllDue();
-    setIsJustQueuedDue(true);
-    setResetSuccessMessage(`All ${totalCards} cards have been queued and are ready for practice now!`);
-    setTimeout(() => {
-      setIsJustQueuedDue(false);
-    }, 2500);
-    setTimeout(() => {
-      setResetSuccessMessage(null);
-    }, 4500);
-  };
-
   return (
     <div id="settings-view" className="w-full max-w-3xl mx-auto px-4 py-6 sm:py-8 flex flex-col gap-6">
       {/* Header */}
@@ -80,7 +71,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <SettingsIcon className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight">Settings</h2>
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+              Settings &amp; Preferences
+            </h2>
             <p className="text-xs sm:text-sm font-medium text-slate-500">
               Customize study preferences, scheduling queue, and deck safeguards.
             </p>
@@ -96,13 +89,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
-      {/* Modern Minimal Heat Map with Full Space */}
-      <ProgressHeatmap activityLog={activityLog} />
-
       {/* Study Preferences Section */}
       <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs flex flex-col gap-4">
         <h3 className="text-sm font-black text-slate-900 tracking-tight uppercase text-[11px] text-slate-400">
-          Study & Audio Preferences
+          Study &amp; Audio Preferences
         </h3>
 
         {/* Auto-Play on Card Display Toggle */}
@@ -168,15 +158,87 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* Improved Dedicated UI for "Reset All Cards to Due Now" */}
+      {/* Substantially Simplified: New Cards & Daily Pacing */}
+      <div id="settings-new-cards-section" className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs flex flex-col gap-4">
+        <h3 className="text-sm font-black text-slate-900 tracking-tight uppercase text-[11px] text-slate-400">
+          New Cards &amp; Daily Pacing
+        </h3>
+
+        {/* Daily Limit - Simplified & Clean */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-2 border-b border-slate-100">
+          <div>
+            <div className="text-sm font-extrabold text-slate-800">
+              Daily New Card Limit
+            </div>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              Maximum new cards introduced per day (enter 0 for no limit).
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              id="settings-daily-new-limit-input"
+              type="number"
+              min="0"
+              max="500"
+              value={dailyNewLimit}
+              onChange={(e) => {
+                const parsed = parseInt(e.target.value, 10);
+                onUpdateDailyNewLimit?.(isNaN(parsed) || parsed < 0 ? 0 : parsed);
+              }}
+              className="w-24 px-3 py-2 rounded-xl border border-slate-200 text-sm font-black text-center text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="text-xs font-bold text-slate-500 whitespace-nowrap">cards / day</span>
+          </div>
+        </div>
+
+        {/* New Card Order */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-1">
+          <div>
+            <div className="text-sm font-extrabold text-slate-800">
+              New Card Order
+            </div>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              Introduce cards in the order added or shuffled randomly.
+            </p>
+          </div>
+          <div className="flex rounded-xl p-1 bg-slate-100 border border-slate-200/80 w-fit">
+            <button
+              type="button"
+              id="new-cards-deck-order-btn"
+              onClick={() => onToggleRandomizeNewCards?.(false)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                !randomizeNewCards
+                  ? 'bg-white text-slate-900 shadow-xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Deck Order
+            </button>
+            <button
+              type="button"
+              id="new-cards-random-order-btn"
+              onClick={() => onToggleRandomizeNewCards?.(true)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                randomizeNewCards
+                  ? 'bg-white text-slate-900 shadow-xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Random
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* FSRS Scheduling & Review Ahead (Replaced Reset All with Review Ahead & Free Study) */}
       <div className="bg-gradient-to-br from-blue-50/70 via-indigo-50/40 to-white rounded-3xl p-5 sm:p-6 border border-blue-200/80 shadow-xs flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-blue-900 font-black text-xs uppercase tracking-wider">
-            <Sparkles className="w-4 h-4 text-blue-600" />
-            <span>Study Queue & Review Scheduling</span>
+            <Clock className="w-4 h-4 text-blue-600" />
+            <span>FSRS Scheduling &amp; Study Modes</span>
           </div>
           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-100/90 text-blue-800 border border-blue-200/60">
-            Safe • Non-Destructive
+            FSRS Compliant
           </span>
         </div>
 
@@ -222,42 +284,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             ))}
           </div>
         </div>
-
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 pt-1">
-          <div className="max-w-md">
-            <h4 className="text-base font-black text-slate-900">
-              Reset All Cards to &quot;Due Now&quot;
-            </h4>
-            <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1 leading-relaxed">
-              Want to practice ahead? This immediately queues all{' '}
-              <strong className="text-slate-900 font-black">{totalCards} cards</strong> in this profile for review right now.
-              Your card memory stability, repetition count, and FSRS difficulty history remain completely safe and intact.
-            </p>
-          </div>
-
-          <button
-            id="settings-reset-all-due-btn"
-            type="button"
-            onClick={handleMakeAllDue}
-            className={`px-5 py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0 border-b-3 active:translate-y-0.5 active:border-b-1 ${
-              isJustQueuedDue
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-800 shadow-md'
-                : 'bg-blue-600 hover:bg-blue-700 text-white border-blue-800 shadow-sm hover:shadow-md'
-            }`}
-          >
-            {isJustQueuedDue ? (
-              <>
-                <Check className="w-4 h-4 stroke-[3]" />
-                <span>All {totalCards} Cards Due!</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                <span>Make All {totalCards} Cards Due</span>
-              </>
-            )}
-          </button>
-        </div>
       </div>
 
       {/* Danger Zone */}
@@ -268,91 +294,82 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <div className="text-sm font-extrabold text-slate-900">
+          <div className="max-w-md">
+            <h4 className="text-sm font-black text-rose-950">
               Reset to Starter Deck
-            </div>
-            <p className="text-xs text-slate-600 font-medium mt-0.5 max-w-lg">
-              Replaces all cards with the original 8 starter cards. All custom created cards and CSV imports for this account will be permanently removed.
+            </h4>
+            <p className="text-xs text-rose-700/80 font-medium mt-0.5 leading-relaxed">
+              Replace current profile cards with the clean French starter deck. This action cannot be undone.
             </p>
           </div>
 
-          {/* Trigger Button with Safeguard */}
           <button
-            id="open-reset-default-dialog-btn"
             type="button"
-            onClick={() => {
-              setConfirmInputText('');
-              setIsConfirmModalOpen(true);
-            }}
-            className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs sm:text-sm flex items-center gap-2 shadow-xs transition-colors cursor-pointer shrink-0"
+            id="settings-reset-deck-btn"
+            onClick={() => setIsConfirmModalOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-white hover:bg-rose-100/80 border border-rose-300 text-rose-700 font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer shrink-0 shadow-2xs"
           >
-            <RotateCcw className="w-4 h-4" />
-            <span>Reset to Starter Deck</span>
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Reset Deck</span>
           </button>
         </div>
       </div>
 
-      {/* Confirmation Safeguard Modal */}
+      {/* Safety Confirmation Modal for Reset to Starter Deck */}
       {isConfirmModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-slate-200 shadow-2xl flex flex-col gap-4 animate-in zoom-in-95 duration-150">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsConfirmModalOpen(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 border border-slate-200 shadow-2xl flex flex-col gap-4 relative">
+            <button
+              type="button"
+              onClick={() => setIsConfirmModalOpen(false)}
+              className="absolute top-5 right-5 p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center">
+              <AlertTriangle className="w-6 h-6" />
             </div>
 
             <div>
               <h3 className="text-lg font-black text-slate-900">
-                Are you absolutely sure?
+                Reset to Default Starter Deck?
               </h3>
-              <p className="text-xs text-slate-600 font-medium mt-1 leading-relaxed">
-                This action cannot be undone. It will permanently replace your current{' '}
-                <strong className="text-slate-900 font-black">{totalCards} cards</strong> with the original 10 starter cards for{' '}
-                <strong className="text-slate-900 font-black">{activeProfile?.name}</strong>.
+              <p className="text-xs text-slate-500 font-medium mt-1 leading-relaxed">
+                This will overwrite the current <strong className="text-slate-800">{totalCards} cards</strong> in {activeProfile?.name || 'this profile'} with the starter deck. Type <strong className="text-rose-600">RESET</strong> to confirm.
               </p>
             </div>
 
-            <div className="bg-rose-50 p-3 rounded-2xl border border-rose-200 text-xs text-rose-800 font-semibold">
-              To verify and proceed, please type <strong className="font-black text-rose-900">RESET</strong> in the box below:
-            </div>
-
             <input
-              id="confirm-reset-input"
               type="text"
+              placeholder='Type "RESET" here'
               value={confirmInputText}
               onChange={(e) => setConfirmInputText(e.target.value)}
-              placeholder="Type RESET to confirm"
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-bold text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
-              autoFocus
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500"
             />
 
-            {/* Actions */}
-            <div className="flex items-center justify-end gap-2.5 pt-2">
+            <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setIsConfirmModalOpen(false)}
-                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm transition-colors cursor-pointer"
+                onClick={() => {
+                  setIsConfirmModalOpen(false);
+                  setConfirmInputText('');
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
-                id="confirm-reset-to-default-btn"
                 type="button"
-                disabled={confirmInputText.trim().toUpperCase() !== 'RESET'}
+                disabled={confirmInputText.trim() !== 'RESET'}
                 onClick={handleExecuteResetToDefault}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:hover:bg-rose-600 text-white font-black text-xs sm:text-sm transition-all cursor-pointer shadow-xs"
+                className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all ${
+                  confirmInputText.trim() === 'RESET'
+                    ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-xs cursor-pointer'
+                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                }`}
               >
-                Confirm Reset Deck
+                Confirm Reset
               </button>
             </div>
           </div>

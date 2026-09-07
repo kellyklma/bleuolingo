@@ -6,8 +6,10 @@ import { AppSidebar, NavigationTab } from './components/AppSidebar';
 import { SessionProgress } from './components/SessionProgress';
 import { FlashcardView } from './components/FlashcardView';
 import { SessionComplete } from './components/SessionComplete';
+import { FreeStudyView } from './components/FreeStudyView';
 import { DeckManagerView } from './components/DeckManagerView';
 import { SettingsView } from './components/SettingsView';
+import { StatsView } from './components/StatsView';
 import { BleuoMascot } from './components/BleuoMascot';
 import {
   getInitialProfiles,
@@ -22,13 +24,25 @@ import {
 import { loadActivityLog, recordReviewActivity, ActivityLog, formatDateKey } from './lib/activityStorage';
 import { User } from 'firebase/auth';
 import { subscribeToAuth, loginWithGoogle, logout } from './lib/auth';
-import { Sparkles, ArrowLeftRight, Menu, X } from 'lucide-react';
+import { ArrowLeftRight, BookOpen, Menu, X } from 'lucide-react';
 import {
   fetchUserCardsFirestore,
   saveUserCardsFirestore,
   fetchUserActivityFirestore,
   recordReviewActivityFirestore,
 } from './lib/firestoreStorage';
+import {
+  getDailyNewCardLimit,
+  saveDailyNewCardLimit,
+  getRandomizeNewCards,
+  saveRandomizeNewCards,
+  getNewCardsIntroducedToday,
+  recordNewCardIntroducedToday,
+  getTodayNewCardsOverride,
+  addTodayNewCardsOverride,
+  clearTodayNewCards,
+  getAvailableNewCards,
+} from './lib/studySettingsStorage';
 
 const AUTOPLAY_DISPLAY_KEY = 'bleuolingo_autoplay_display_v1';
 const AUTOPLAY_FLIP_KEY = 'bleuolingo_autoplay_flip_v1';
@@ -151,6 +165,64 @@ export default function App() {
     }
   };
 
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const effectiveUserId = currentUser ? currentUser.uid : activeUserId;
+
+  // Daily new card limit (default 20 cards/day, 0 = No limit)
+  const [dailyNewLimit, setDailyNewLimit] = useState<number>(() => {
+    return getDailyNewCardLimit(activeUserId);
+  });
+
+  const handleUpdateDailyNewLimit = (limit: number) => {
+    setDailyNewLimit(limit);
+    saveDailyNewCardLimit(effectiveUserId, limit);
+  };
+
+  // Randomize new cards order preference (default false = deck order)
+  const [randomizeNewCards, setRandomizeNewCards] = useState<boolean>(() => {
+    return getRandomizeNewCards(activeUserId);
+  });
+
+  const handleToggleRandomizeNewCards = (randomize: boolean) => {
+    setRandomizeNewCards(randomize);
+    saveRandomizeNewCards(effectiveUserId, randomize);
+  };
+
+  // Tracking how many new cards have been introduced today
+  const [newCardsIntroducedToday, setNewCardsIntroducedToday] = useState<number>(() => {
+    return getNewCardsIntroducedToday(activeUserId);
+  });
+
+  // Today's override allowance for extra new cards
+  const [overrideNewCardsToday, setOverrideNewCardsToday] = useState<number>(() => {
+    return getTodayNewCardsOverride(activeUserId);
+  });
+
+  const handleAddTodayOverride = (additionalCount: number) => {
+    const nextCount = addTodayNewCardsOverride(effectiveUserId, additionalCount);
+    setOverrideNewCardsToday(nextCount);
+    // Reset session stats so the new batch of cards counts cleanly from 0
+    setSessionStats({
+      totalReviewed: 0,
+      againCount: 0,
+      hardCount: 0,
+      goodCount: 0,
+      easyCount: 0,
+      sessionStartTime: Date.now(),
+    });
+  };
+
+  // Keep settings synced whenever effective user changes
+  useEffect(() => {
+    setDailyNewLimit(getDailyNewCardLimit(effectiveUserId));
+    setRandomizeNewCards(getRandomizeNewCards(effectiveUserId));
+    setNewCardsIntroducedToday(getNewCardsIntroducedToday(effectiveUserId));
+    setOverrideNewCardsToday(getTodayNewCardsOverride(effectiveUserId));
+  }, [effectiveUserId]);
+
+  // Session random salt for stable card shuffling across renders
+  const [sessionSalt, setSessionSalt] = useState<string>(() => Math.random().toString(36).substring(2, 9));
+
   // Active card flipping state
   const [isFlipped, setIsFlipped] = useState(false);
 
@@ -167,8 +239,9 @@ export default function App() {
     sessionStartTime: Date.now(),
   });
 
-  const [practiceAhead, setPracticeAhead] = useState(false);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [reviewAheadCardIds, setReviewAheadCardIds] = useState<string[]>([]);
+  const [isFreeStudyMode, setIsFreeStudyMode] = useState(false);
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
   // Lock flag: prevents auto-save from clobbering Firestore before cloud data has been loaded
   const isCloudLoadedRef = useRef<boolean>(false);
@@ -262,6 +335,10 @@ export default function App() {
     const loadedCards = loadUserCards(userId);
     setCards(loadedCards);
     setActivityLog(loadActivityLog(userId));
+    setDailyNewLimit(getDailyNewCardLimit(userId));
+    setRandomizeNewCards(getRandomizeNewCards(userId));
+    setNewCardsIntroducedToday(getNewCardsIntroducedToday(userId));
+    setOverrideNewCardsToday(getTodayNewCardsOverride(userId));
     setIsFlipped(false);
     setSessionStats({
       totalReviewed: 0,
@@ -283,6 +360,10 @@ export default function App() {
     });
     setCards(STARTER_DECK.map(lowercaseCard));
     setActivityLog(loadActivityLog(newProfile.id));
+    setDailyNewLimit(getDailyNewCardLimit(newProfile.id));
+    setRandomizeNewCards(getRandomizeNewCards(newProfile.id));
+    setNewCardsIntroducedToday(getNewCardsIntroducedToday(newProfile.id));
+    setOverrideNewCardsToday(getTodayNewCardsOverride(newProfile.id));
     setIsFlipped(false);
     setSessionStats({
       totalReviewed: 0,
@@ -303,6 +384,10 @@ export default function App() {
     if (userIdToDelete === activeUserId) {
       setCards(loadUserCards(nextActiveId));
       setActivityLog(loadActivityLog(nextActiveId));
+      setDailyNewLimit(getDailyNewCardLimit(nextActiveId));
+      setRandomizeNewCards(getRandomizeNewCards(nextActiveId));
+      setNewCardsIntroducedToday(getNewCardsIntroducedToday(nextActiveId));
+      setOverrideNewCardsToday(getTodayNewCardsOverride(nextActiveId));
       setIsFlipped(false);
       setSessionStats({
         totalReviewed: 0,
@@ -357,32 +442,100 @@ export default function App() {
   // Card queues calculation
   const now = Date.now();
 
-  const newCards = useMemo(() => cards.filter((c) => c.state === 'new'), [cards]);
+  const newCardsResult = useMemo(
+    () =>
+      getAvailableNewCards(
+        cards,
+        dailyNewLimit,
+        newCardsIntroducedToday,
+        overrideNewCardsToday,
+        randomizeNewCards,
+        sessionSalt
+      ),
+    [cards, dailyNewLimit, newCardsIntroducedToday, overrideNewCardsToday, randomizeNewCards, sessionSalt]
+  );
+
+  const newCards = newCardsResult.queueNewCards;
+  const unintroducedNewCardsCount = newCardsResult.unintroducedCount;
+  const allNewCardsCount = newCardsResult.allNewCardsCount;
+
+  const reviewAheadSet = useMemo(() => new Set(reviewAheadCardIds), [reviewAheadCardIds]);
+
   const learningCards = useMemo(
     () =>
       cards
-        .filter((c) => (c.state === 'learning' || c.state === 'relearning') && (practiceAhead || c.due <= now))
+        .filter(
+          (c) =>
+            (c.state === 'learning' || c.state === 'relearning') &&
+            (c.due <= now || reviewAheadSet.has(c.id))
+        )
         .sort((a, b) => a.due - b.due),
-    [cards, now, practiceAhead]
+    [cards, now, reviewAheadSet]
   );
   const reviewCards = useMemo(
     () =>
       cards
-        .filter((c) => c.state === 'review' && (practiceAhead || c.due <= now))
+        .filter(
+          (c) =>
+            c.state === 'review' &&
+            (c.due <= now || reviewAheadSet.has(c.id))
+        )
         .sort((a, b) => a.due - b.due),
-    [cards, now, practiceAhead]
+    [cards, now, reviewAheadSet]
   );
-  const dueCount = useMemo(() => cards.filter((c) => c.due <= now).length, [cards, now]);
+  const dueCount = useMemo(
+    () =>
+      cards.filter(
+        (c) => c.state !== 'new' && (c.due <= now || reviewAheadSet.has(c.id))
+      ).length,
+    [cards, now, reviewAheadSet]
+  );
+
+  const cardsDueAheadCount = useMemo(
+    () =>
+      cards.filter(
+        (c) =>
+          (c.state === 'review' || c.state === 'learning' || c.state === 'relearning') &&
+          c.due > now &&
+          c.due <= now + ONE_DAY_MS &&
+          !reviewAheadSet.has(c.id)
+      ).length,
+    [cards, now, ONE_DAY_MS, reviewAheadSet]
+  );
+
+  // One-time addition of cards scheduled within the next 24 hours to the daily queue (Anki-style)
+  const handleTriggerReviewAhead = useCallback(() => {
+    const candidateIds = cards
+      .filter(
+        (c) =>
+          (c.state === 'review' || c.state === 'learning' || c.state === 'relearning') &&
+          c.due > now &&
+          c.due <= now + ONE_DAY_MS &&
+          !reviewAheadSet.has(c.id)
+      )
+      .map((c) => c.id);
+
+    if (candidateIds.length > 0) {
+      setReviewAheadCardIds((prev) => Array.from(new Set([...prev, ...candidateIds])));
+      setIsFlipped(false);
+      // Reset session stats for the new review-ahead batch so progress starts cleanly from 0
+      setSessionStats({
+        totalReviewed: 0,
+        againCount: 0,
+        hardCount: 0,
+        goodCount: 0,
+        easyCount: 0,
+        sessionStartTime: Date.now(),
+      });
+    }
+  }, [cards, now, ONE_DAY_MS, reviewAheadSet]);
 
   const currentCard = useMemo(() => {
     if (learningCards.length > 0) return learningCards[0];
     if (reviewCards.length > 0) return reviewCards[0];
     if (newCards.length > 0) return newCards[0];
-    if (practiceAhead && cards.length > 0) {
-      return [...cards].sort((a, b) => a.stability - b.stability)[0];
-    }
     return null;
-  }, [learningCards, reviewCards, newCards, practiceAhead, cards]);
+  }, [learningCards, reviewCards, newCards]);
 
   // Handle rating a card with FSRS
   const handleRateCard = useCallback(
@@ -398,6 +551,12 @@ export default function App() {
       const updatedProps = calculateNextFSRSState(activeCard, rating, Date.now(), targetRetention);
       const updatedCard: Flashcard = { ...activeCard, ...updatedProps };
 
+      // Record new card introduction if card was brand new
+      if (activeCard.state === 'new') {
+        const nextCount = recordNewCardIntroducedToday(effectiveUserId, 1);
+        setNewCardsIntroducedToday(nextCount);
+      }
+
       setCards((prevCards) => {
         let nextCards: Flashcard[];
         if (rating === 1) {
@@ -407,6 +566,11 @@ export default function App() {
         }
         return nextCards;
       });
+
+      // If card was part of the one-time review-ahead batch, remove it so queue shrinks and completes
+      if (reviewAheadSet.has(activeCard.id)) {
+        setReviewAheadCardIds((prev) => prev.filter((id) => id !== activeCard.id));
+      }
 
       setSessionStats((prev) => ({
         ...prev,
@@ -492,6 +656,7 @@ export default function App() {
       persistCards(nextDeck);
       return nextDeck;
     });
+    setReviewAheadCardIds((prev) => prev.filter((cid) => cid !== id));
     setIsFlipped(false);
   };
 
@@ -500,7 +665,11 @@ export default function App() {
     const defaultDeck = STARTER_DECK.map(lowercaseCard);
     setCards(defaultDeck);
     persistCards(defaultDeck);
-    setPracticeAhead(false);
+    clearTodayNewCards(effectiveUserId);
+    setNewCardsIntroducedToday(0);
+    setOverrideNewCardsToday(0);
+    setSessionSalt(Math.random().toString(36).substring(2, 9));
+    setReviewAheadCardIds([]);
     setIsFlipped(false);
     setSessionStats({
       totalReviewed: 0,
@@ -512,18 +681,9 @@ export default function App() {
     });
   };
 
-  const handleResetAllDue = () => {
-    const timestamp = Date.now();
-    setCards((prev) => {
-      const nextDeck = prev.map((c) => ({ ...c, due: timestamp }));
-      persistCards(nextDeck);
-      return nextDeck;
-    });
-    setPracticeAhead(false);
-    setIsFlipped(false);
-  };
-
   const handleResetSession = () => {
+    setSessionSalt(Math.random().toString(36).substring(2, 9));
+    setReviewAheadCardIds([]);
     setSessionStats({
       totalReviewed: 0,
       againCount: 0,
@@ -557,18 +717,45 @@ export default function App() {
                 {currentUser?.displayName || profiles.find((p) => p.id === activeUserId)?.name || 'Learner'}
               </span>
               <span>•</span>
-              <span>{dueCount} cards due</span>
+              <span>
+                {dueCount > 0
+                  ? `${dueCount} cards due`
+                  : newCards.length > 0
+                  ? `${newCards.length} new cards`
+                  : '0 cards due'}
+              </span>
             </div>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer"
-        >
-          {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            id="mobile-free-study-toggle-btn"
+            onClick={() => {
+              const next = !isFreeStudyMode;
+              setIsFreeStudyMode(next);
+              if (next && activeTab !== 'practice') setActiveTab('practice');
+            }}
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer ${
+              isFreeStudyMode
+                ? 'bg-purple-600 text-white shadow-xs'
+                : 'bg-purple-50 text-purple-700 border border-purple-200'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Free Study</span>
+            <span>{isFreeStudyMode ? 'ON' : 'OFF'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer"
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
       </header>
 
       {/* Sidebar Navigation */}
@@ -580,6 +767,7 @@ export default function App() {
             setMobileMenuOpen(false);
           }}
           dueCount={dueCount}
+          newCount={newCards.length}
           totalCards={cards.length}
           reviewedCount={todayReviewedCount}
           activityLog={activityLog}
@@ -595,6 +783,8 @@ export default function App() {
           currentUser={currentUser}
           onLogin={loginWithGoogle}
           onLogout={logout}
+          isFreeStudyMode={isFreeStudyMode}
+          onToggleFreeStudy={setIsFreeStudyMode}
         />
       </div>
 
@@ -606,77 +796,81 @@ export default function App() {
         {/* Practice / Flashcard View */}
         {activeTab === 'practice' && (
           <div className="flex-1 flex flex-col w-full max-w-2xl mx-auto px-4 py-4 sm:py-6">
-            <div className="w-full flex items-center justify-between gap-3 mb-3">
-              <div className="flex-1">
-                <SessionProgress
-                  reviewedThisSession={sessionStats.totalReviewed}
-                  newCount={newCards.length}
-                  learningCount={learningCards.length}
-                  reviewCount={reviewCards.length}
-                  totalDeckSize={cards.length}
-                />
-              </div>
+            {isFreeStudyMode ? (
+              <FreeStudyView
+                cards={cards}
+                isSidesSwapped={isSidesSwapped}
+                onToggleSwitchSides={handleToggleSwitchSides}
+                onExitFreeStudy={() => setIsFreeStudyMode(false)}
+                frontLanguage={frontLanguage}
+                backLanguage={backLanguage}
+                autoPlayOnDisplay={autoPlayOnDisplay}
+                autoPlayOnFlip={autoPlayOnFlip}
+              />
+            ) : (
+              <>
+                <div className="w-full flex items-center justify-between gap-3 mb-3">
+                  <div className="flex-1">
+                    <SessionProgress
+                      reviewedThisSession={sessionStats.totalReviewed}
+                      newCount={newCards.length}
+                      learningCount={learningCards.length}
+                      reviewCount={reviewCards.length}
+                      totalDeckSize={cards.length}
+                    />
+                  </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  id="study-reverse-sides-btn"
-                  onClick={handleToggleSwitchSides}
-                  title={isSidesSwapped ? 'Reverse Mode: Active' : 'Reverse Mode: Inactive'}
-                  className={`h-9 px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${isSidesSwapped
-                      ? 'bg-blue-500 border-blue-600 text-white shadow-xs'
-                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-2xs'
-                    }`}
-                >
-                  <ArrowLeftRight className="w-3.5 h-3.5" />
-                  <span>Reverse</span>
-                </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      id="study-reverse-sides-btn"
+                      onClick={handleToggleSwitchSides}
+                      title={isSidesSwapped ? 'Reverse Mode: Active' : 'Reverse Mode: Inactive'}
+                      className={`h-9 px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                        isSidesSwapped
+                          ? 'bg-blue-500 border-blue-600 text-white shadow-xs'
+                          : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-2xs'
+                      }`}
+                    >
+                      <ArrowLeftRight className="w-3.5 h-3.5" />
+                      <span>Reverse</span>
+                    </button>
+                  </div>
+                </div>
 
-                {!currentCard && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleResetAllDue();
-                      setPracticeAhead(true);
-                    }}
-                    className="h-9 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Practice Ahead</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="flex-1 flex flex-col justify-start mt-1 sm:mt-2">
-              {currentCard ? (
-                <FlashcardView
-                  key={currentCard.id}
-                  card={currentCard}
-                  isFlipped={isFlipped}
-                  onFlip={() => setIsFlipped(true)}
-                  onRate={handleRateCard}
-                  autoPlayOnDisplay={autoPlayOnDisplay}
-                  autoPlayOnFlip={autoPlayOnFlip}
-                  isSidesSwapped={isSidesSwapped}
-                  frontLanguage={frontLanguage}
-                  backLanguage={backLanguage}
-                  targetRetention={targetRetention}
-                  onDeleteCard={handleDeleteCard}
-                  onUpdateCard={handleUpdateCard}
-                />
-              ) : (
-                <SessionComplete
-                  stats={sessionStats}
-                  onPracticeAll={() => {
-                    handleResetAllDue();
-                    setPracticeAhead(true);
-                  }}
-                  onOpenUpload={() => setActiveTab('deck')}
-                  onRestartSession={handleResetSession}
-                />
-              )}
-            </div>
+                <div className="flex-1 flex flex-col justify-start mt-1 sm:mt-2">
+                  {currentCard ? (
+                    <FlashcardView
+                      key={currentCard.id}
+                      card={currentCard}
+                      isFlipped={isFlipped}
+                      onFlip={() => setIsFlipped(true)}
+                      onRate={handleRateCard}
+                      autoPlayOnDisplay={autoPlayOnDisplay}
+                      autoPlayOnFlip={autoPlayOnFlip}
+                      isSidesSwapped={isSidesSwapped}
+                      frontLanguage={frontLanguage}
+                      backLanguage={backLanguage}
+                      targetRetention={targetRetention}
+                      onDeleteCard={handleDeleteCard}
+                      onUpdateCard={handleUpdateCard}
+                    />
+                  ) : (
+                    <SessionComplete
+                      stats={sessionStats}
+                      onReviewAhead={handleTriggerReviewAhead}
+                      cardsDueAheadCount={cardsDueAheadCount}
+                      onAddTodayOverride={handleAddTodayOverride}
+                      unintroducedNewCardsCount={unintroducedNewCardsCount}
+                      newCardsIntroducedToday={newCardsIntroducedToday}
+                      dailyNewLimit={dailyNewLimit}
+                      onStartFreeStudy={() => setIsFreeStudyMode(true)}
+                      onRestartSession={handleResetSession}
+                    />
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -696,6 +890,17 @@ export default function App() {
           />
         )}
 
+        {/* Dedicated Study Activity & Stats View */}
+        {activeTab === 'stats' && (
+          <StatsView
+            activityLog={activityLog}
+            cards={cards}
+            sessionStats={sessionStats}
+            todayReviewedCount={todayReviewedCount}
+            dueCount={dueCount}
+          />
+        )}
+
         {/* Settings View */}
         {activeTab === 'settings' && (
           <SettingsView
@@ -708,7 +913,10 @@ export default function App() {
             onToggleAutoPlayOnFlip={toggleAutoPlayOnFlip}
             targetRetention={targetRetention}
             onUpdateTargetRetention={handleUpdateTargetRetention}
-            onResetAllDue={handleResetAllDue}
+            dailyNewLimit={dailyNewLimit}
+            onUpdateDailyNewLimit={handleUpdateDailyNewLimit}
+            randomizeNewCards={randomizeNewCards}
+            onToggleRandomizeNewCards={handleToggleRandomizeNewCards}
             onResetToDefault={handleResetToDefault}
           />
         )}

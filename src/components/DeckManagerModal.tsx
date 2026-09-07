@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Search, Plus, Trash2, RotateCcw, Volume2, Calendar } from 'lucide-react';
+import { X, Search, Plus, Trash2, RotateCcw, Volume2 } from 'lucide-react';
 import { Flashcard } from '../types';
 import { formatInterval } from '../lib/fsrs';
 import { playPronunciation } from '../lib/audio';
@@ -11,7 +11,6 @@ interface DeckManagerModalProps {
   onAddCard: (card: Flashcard) => void;
   onDeleteCard: (id: string) => void;
   onResetToDefault: () => void;
-  onResetAllDue: () => void;
 }
 
 export const DeckManagerModal: React.FC<DeckManagerModalProps> = ({
@@ -21,7 +20,6 @@ export const DeckManagerModal: React.FC<DeckManagerModalProps> = ({
   onAddCard,
   onDeleteCard,
   onResetToDefault,
-  onResetAllDue,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -250,18 +248,9 @@ export const DeckManagerModal: React.FC<DeckManagerModalProps> = ({
         <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2">
             <button
-              id="reset-due-dates-btn"
-              onClick={onResetAllDue}
-              className="text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 px-2.5 py-1.5 rounded-xl hover:bg-blue-50 transition-colors"
-              title="Make all cards due for review right now"
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Make All Due Now</span>
-            </button>
-            <button
               id="restore-starter-deck-btn"
               onClick={onResetToDefault}
-              className="text-slate-500 hover:text-slate-700 font-semibold flex items-center gap-1 px-2.5 py-1.5 rounded-xl hover:bg-slate-100 transition-colors"
+              className="text-slate-500 hover:text-slate-700 font-semibold flex items-center gap-1 px-2.5 py-1.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
               title="Reset to default French starter deck"
             >
               <RotateCcw className="w-3.5 h-3.5" />

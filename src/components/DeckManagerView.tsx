@@ -72,7 +72,6 @@ interface DeckManagerViewProps {
   onUpdateCard: (card: Flashcard) => void;
   onDeleteCard: (id: string) => void;
   onResetToDefault?: () => void;
-  onResetAllDue?: () => void;
 }
 
 export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
@@ -87,7 +86,6 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
   onUpdateCard,
   onDeleteCard,
   onResetToDefault,
-  onResetAllDue,
 }) => {
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -125,8 +123,11 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
     return Array.from(set).sort();
   }, [cards]);
 
-  // Counts for filters
-  const dueCount = useMemo(() => cards.filter((c) => c.due <= now).length, [cards, now]);
+  // Counts for filters (Anki/FSRS: 'due' strictly applies to graduated review or active learning cards, never new cards)
+  const dueCount = useMemo(
+    () => cards.filter((c) => c.state !== 'new' && c.due <= now).length,
+    [cards, now]
+  );
   const newCount = useMemo(() => cards.filter((c) => c.state === 'new').length, [cards]);
   const learningCount = useMemo(
     () => cards.filter((c) => c.state === 'learning' || c.state === 'relearning').length,
@@ -260,7 +261,7 @@ export const DeckManagerView: React.FC<DeckManagerViewProps> = ({
       }
 
       if (filterState === 'all') return true;
-      if (filterState === 'due') return c.due <= now;
+      if (filterState === 'due') return c.state !== 'new' && c.due <= now;
       if (filterState === 'learning') return c.state === 'learning' || c.state === 'relearning';
       return c.state === filterState;
     });

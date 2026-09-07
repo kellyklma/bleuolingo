@@ -44,7 +44,7 @@ export const SessionProgress: React.FC<SessionProgressProps> = ({
       {/* Count */}
       <div className="text-xs font-black text-slate-500 shrink-0 select-none">
         <span className="text-blue-600">{reviewedThisSession}</span>
-        {activeQueueSize > 0 && <span className="text-slate-400">/{totalSessionTarget}</span>}
+        <span className="text-slate-400">/{Math.max(reviewedThisSession, totalSessionTarget)}</span>
       </div>
     </div>
   );
