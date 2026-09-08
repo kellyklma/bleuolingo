@@ -330,7 +330,8 @@ export default function App() {
   const newCards = newCardsResult.queueNewCards;
   const unintroducedNewCardsCount = newCardsResult.unintroducedCount;
 
-  const queueReferenceTime = sessionStats.sessionStartTime || Date.now();
+  // Real-time evaluation timestamp so learning cards re-surface without refresh
+  const now = Date.now();
 
   const learningCards = useMemo(
     () =>
@@ -338,10 +339,10 @@ export default function App() {
         .filter(
           (c) =>
             (c.state === 'learning' || c.state === 'relearning') &&
-            (c.due <= queueReferenceTime || reviewAheadSet.has(c.id))
+            (c.due <= now || reviewAheadSet.has(c.id))
         )
         .sort((a, b) => a.due - b.due),
-    [cards, queueReferenceTime, reviewAheadSet]
+    [cards, now, reviewAheadSet]
   );
 
   const reviewCards = useMemo(
@@ -350,24 +351,33 @@ export default function App() {
         .filter(
           (c) =>
             c.state === 'review' &&
-            (c.due <= queueReferenceTime || reviewAheadSet.has(c.id))
+            (c.due <= now || reviewAheadSet.has(c.id))
         )
         .sort((a, b) => a.due - b.due),
-    [cards, queueReferenceTime, reviewAheadSet]
+    [cards, now, reviewAheadSet]
   );
 
-  const totalToStudy = learningCards.length + reviewCards.length + newCards.length;
+  // Mandatory due count for the Sidebar (ignores optional Review Ahead cards)
+  const strictlyDueCount = useMemo(() => {
+    const dueLearning = cards.filter(
+      (c) => (c.state === 'learning' || c.state === 'relearning') && c.due <= now
+    ).length;
+    const dueReview = cards.filter(
+      (c) => c.state === 'review' && c.due <= now
+    ).length;
+    return dueLearning + dueReview + newCards.length;
+  }, [cards, now, newCards.length]);
 
   const cardsDueAheadCount = useMemo(
     () =>
       cards.filter(
         (c) =>
           (c.state === 'review' || c.state === 'learning' || c.state === 'relearning') &&
-          c.due > queueReferenceTime &&
-          c.due <= queueReferenceTime + ONE_DAY_MS &&
+          c.due > now &&
+          c.due <= now + ONE_DAY_MS &&
           !reviewAheadSet.has(c.id)
       ).length,
-    [cards, queueReferenceTime, reviewAheadSet]
+    [cards, now, reviewAheadSet]
   );
 
   const nextCandidateCard = useMemo(() => {
@@ -412,12 +422,10 @@ export default function App() {
         setNewCardsIntroducedToday(nextCount);
       }
 
-      setCards((prevCards) => {
-        if (rating === 1) {
-          return [...prevCards.filter((c) => c.id !== activeCard.id), updatedCard];
-        }
-        return prevCards.map((c) => (c.id === activeCard.id ? updatedCard : c));
-      });
+      // Preserve array positioning to prevent mutating deck order in DB
+      setCards((prevCards) =>
+        prevCards.map((c) => (c.id === activeCard.id ? updatedCard : c))
+      );
 
       if (reviewAheadSet.has(activeCard.id)) {
         setReviewAheadCardIds((prev) => prev.filter((id) => id !== activeCard.id));
@@ -464,8 +472,8 @@ export default function App() {
       .filter(
         (c) =>
           (c.state === 'review' || c.state === 'learning' || c.state === 'relearning') &&
-          c.due > queueReferenceTime &&
-          c.due <= queueReferenceTime + ONE_DAY_MS &&
+          c.due > now &&
+          c.due <= now + ONE_DAY_MS &&
           !reviewAheadSet.has(c.id)
       )
       .map((c) => c.id);
@@ -475,7 +483,7 @@ export default function App() {
       setIsFlipped(false);
       setActiveCardId(null);
     }
-  }, [cards, queueReferenceTime, reviewAheadSet]);
+  }, [cards, now, reviewAheadSet]);
 
   // Retains existing sessionStats and extends the progress target
   const handleAddTodayOverride = (additionalCount: number) => {
@@ -693,8 +701,8 @@ export default function App() {
         aria-modal={mobileMenuOpen || undefined}
         aria-label={mobileMenuOpen ? 'Navigation menu' : undefined}
         className={`${mobileMenuOpen
-            ? 'fixed inset-y-0 right-0 z-50 w-[min(22rem,calc(100vw-3rem))] overflow-y-auto bg-white shadow-2xl'
-            : 'hidden'
+          ? 'fixed inset-y-0 right-0 z-50 w-[min(22rem,calc(100vw-3rem))] overflow-y-auto bg-white shadow-2xl'
+          : 'hidden'
           } md:static md:block md:w-auto md:overflow-visible md:bg-transparent md:shadow-none`}
       >
         <AppSidebar
@@ -703,10 +711,10 @@ export default function App() {
             setActiveTab(tab);
             setMobileMenuOpen(false);
           }}
-          dueCount={isAuthLoading ? 0 : totalToStudy}
-          newCount={isAuthLoading ? 0 : newCards.length}
-          learningCount={isAuthLoading ? 0 : learningCards.length}
-          reviewCount={isAuthLoading ? 0 : reviewCards.length}
+          dueCount={strictlyDueCount}
+          newCount={newCards.length}
+          learningCount={cards.filter((c) => (c.state === 'learning' || c.state === 'relearning') && c.due <= now).length}
+          reviewCount={cards.filter((c) => c.state === 'review' && c.due <= now).length}
           totalCards={cards.length}
           reviewedCount={isAuthLoading ? null : todayReviewedCount}
           activityLog={activityLog}
@@ -776,8 +784,8 @@ export default function App() {
                           onClick={handleToggleSwitchSides}
                           title={isSidesSwapped ? 'Reverse Mode: Active' : 'Reverse Mode: Inactive'}
                           className={`h-9 px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${isSidesSwapped
-                              ? 'bg-blue-500 border-blue-600 text-white shadow-xs'
-                              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-2xs'
+                            ? 'bg-blue-500 border-blue-600 text-white shadow-xs'
+                            : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-2xs'
                             }`}
                         >
                           <ArrowLeftRight className="w-3.5 h-3.5" />
