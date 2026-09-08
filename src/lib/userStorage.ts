@@ -135,7 +135,7 @@ export function getInitialProfiles(): { profiles: UserProfile[]; activeUserId: s
   if (profiles.length === 0) {
     const defaultUser: UserProfile = {
       id: 'user_default',
-      name: 'Learner 1',
+      name: 'Guest',
       avatarColor: AVATAR_COLORS[0],
       createdAt: Date.now(),
     };
@@ -223,7 +223,7 @@ export function createUserProfile(name: string, existingProfiles: UserProfile[])
   const colorIndex = existingProfiles.length % AVATAR_COLORS.length;
   const newProfile: UserProfile = {
     id: newId,
-    name: name.trim() || `Learner ${existingProfiles.length + 1}`,
+    name: name.trim() || `Guest`,
     avatarColor: AVATAR_COLORS[colorIndex],
     createdAt: Date.now(),
   };

@@ -786,7 +786,7 @@ export default function App() {
             </div>
             <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-semibold">
               <span className="text-slate-700 font-bold">
-                {currentUser?.displayName || profiles.find((p) => p.id === activeUserId)?.name || 'Learner'}
+                {currentUser?.displayName || profiles.find((p) => p.id === activeUserId)?.name || 'Guest'}
               </span>
               <span>•</span>
               <span>
