@@ -47,16 +47,96 @@ import {
   getAvailableNewCards,
 } from './lib/studySettingsStorage';
 
-const AUTOPLAY_DISPLAY_KEY = 'bleuolingo_autoplay_display_v1';
-const AUTOPLAY_FLIP_KEY = 'bleuolingo_autoplay_flip_v1';
-const SIDES_SWAPPED_KEY = 'bleuolingo_sides_swapped_v1';
-const SIDEBAR_COLLAPSED_KEY = 'bleuolingo_sidebar_collapsed_v1';
-const FRONT_LANG_KEY = 'bleuolingo_front_lang_v1';
-const BACK_LANG_KEY = 'bleuolingo_back_lang_v1';
-const TARGET_RETENTION_KEY = 'bleuolingo_target_retention_v1';
+const STORAGE_KEYS = {
+  AUTOPLAY_DISPLAY: 'bleuolingo_autoplay_display_v1',
+  AUTOPLAY_FLIP: 'bleuolingo_autoplay_flip_v1',
+  SIDES_SWAPPED: 'bleuolingo_sides_swapped_v1',
+  SIDEBAR_COLLAPSED: 'bleuolingo_sidebar_collapsed_v1',
+  FRONT_LANG: 'bleuolingo_front_lang_v1',
+  BACK_LANG: 'bleuolingo_back_lang_v1',
+  TARGET_RETENTION: 'bleuolingo_target_retention_v1',
+} as const;
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+const createInitialSessionStats = (): SessionStats => ({
+  totalReviewed: 0,
+  againCount: 0,
+  hardCount: 0,
+  goodCount: 0,
+  easyCount: 0,
+  sessionStartTime: Date.now(),
+});
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  // Per-user profiles state
+  const [userState, setUserState] = useState<{ profiles: UserProfile[]; activeUserId: string }>(
+    () => getInitialProfiles()
+  );
+  const { profiles, activeUserId } = userState;
+  const effectiveUserId = currentUser ? currentUser.uid : activeUserId;
+
+  // Deck & Activity
+  const [cards, setCards] = useState<Flashcard[]>(() => loadUserCards(userState.activeUserId));
+  const [activityLog, setActivityLog] = useState<ActivityLog>(() =>
+    loadActivityLog(userState.activeUserId)
+  );
+
+  // Active Review State (Locked Card ID fixes the flip-replacement bug)
+  const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const [isFlipped, setIsFlipped] = useState(false);
+  const [mascotMood, setMascotMood] = useState<'happy' | 'thinking' | 'cheering' | 'wink'>('happy');
+  const [sessionSalt, setSessionSalt] = useState<string>(() => Math.random().toString(36).substring(2, 9));
+  const [reviewAheadCardIds, setReviewAheadCardIds] = useState<string[]>([]);
+  const [sessionStats, setSessionStats] = useState<SessionStats>(createInitialSessionStats);
+
+  // Navigation & Modes
+  const [activeTab, setActiveTab] = useState<NavigationTab>('practice');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isFreeStudyMode, setIsFreeStudyMode] = useState(false);
+
+  // User Settings
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    return typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.SIDEBAR_COLLAPSED) === 'true' : false;
+  });
+  const [frontLanguage, setFrontLanguage] = useState<string>(() => {
+    return (typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEYS.FRONT_LANG)) || 'fr';
+  });
+  const [backLanguage, setBackLanguage] = useState<string>(() => {
+    return (typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEYS.BACK_LANG)) || 'en';
+  });
+  const [autoPlayOnDisplay, setAutoPlayOnDisplay] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const saved = localStorage.getItem(STORAGE_KEYS.AUTOPLAY_DISPLAY);
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [autoPlayOnFlip, setAutoPlayOnFlip] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const saved = localStorage.getItem(STORAGE_KEYS.AUTOPLAY_FLIP);
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [isSidesSwapped, setIsSidesSwapped] = useState<boolean>(() => {
+    return typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.SIDES_SWAPPED) === 'true' : false;
+  });
+  const [targetRetention, setTargetRetention] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_KEYS.TARGET_RETENTION);
+      if (saved) {
+        const val = parseFloat(saved);
+        if (!isNaN(val) && val >= 0.7 && val <= 0.98) return val;
+      }
+    }
+    return 0.9;
+  });
+  const [dailyNewLimit, setDailyNewLimit] = useState<number>(() => getDailyNewCardLimit(activeUserId));
+  const [randomizeNewCards, setRandomizeNewCards] = useState<boolean>(() => getRandomizeNewCards(activeUserId));
+  const [newCardsIntroducedToday, setNewCardsIntroducedToday] = useState<number>(() => getNewCardsIntroducedToday(activeUserId));
+  const [overrideNewCardsToday, setOverrideNewCardsToday] = useState<number>(() => getTodayNewCardsOverride(activeUserId));
+
+  // Firestore Save Guard
+  const isCloudLoadedRef = useRef<boolean>(false);
 
   const persistSetting = useCallback(
     <K extends keyof UserSettingsFirestore>(key: K, value: UserSettingsFirestore[K]) => {
@@ -67,218 +147,7 @@ export default function App() {
     [currentUser]
   );
 
-  // Navigation tab: 'practice' | 'deck' | 'settings'
-  const [activeTab, setActiveTab] = useState<NavigationTab>('practice');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
-    }
-    return false;
-  });
-
-  const toggleSidebarCollapse = () => {
-    setIsSidebarCollapsed((prev) => {
-      const next = !prev;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
-      }
-      persistSetting('isSidebarCollapsed', next);
-      return next;
-    });
-  };
-
-  // Global Audio Languages (Defaults: front -> fr, back -> en)
-  const [frontLanguage, setFrontLanguage] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem(FRONT_LANG_KEY) || 'fr';
-    }
-    return 'fr';
-  });
-
-  const [backLanguage, setBackLanguage] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem(BACK_LANG_KEY) || 'en';
-    }
-    return 'en';
-  });
-
-  const handleSelectFrontLanguage = (lang: string) => {
-    setFrontLanguage(lang);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(FRONT_LANG_KEY, lang);
-    }
-    persistSetting('frontLanguage', lang);
-  };
-
-  const handleSelectBackLanguage = (lang: string) => {
-    setBackLanguage(lang);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(BACK_LANG_KEY, lang);
-    }
-    persistSetting('backLanguage', lang);
-  };
-
-  // Per-user profiles state (isolated cards, CSV imports, and FSRS progress per user)
-  const [userState, setUserState] = useState<{ profiles: UserProfile[]; activeUserId: string }>(
-    () => getInitialProfiles()
-  );
-  const profiles = userState.profiles;
-  const activeUserId = userState.activeUserId;
-
-  // Initialize cards for the active user
-  const [cards, setCards] = useState<Flashcard[]>(() => loadUserCards(userState.activeUserId));
-
-  // Activity tracking for heatmap & streaks
-  const [activityLog, setActivityLog] = useState<ActivityLog>(() =>
-    loadActivityLog(userState.activeUserId)
-  );
-
-  // Audio auto-play preferences
-  const [autoPlayOnDisplay, setAutoPlayOnDisplay] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(AUTOPLAY_DISPLAY_KEY);
-      if (saved !== null) return saved === 'true';
-      const legacy = localStorage.getItem('bleuolingo_auto_audio_v1');
-      if (legacy !== null) return legacy !== 'false';
-    }
-    return true;
-  });
-
-  const [autoPlayOnFlip, setAutoPlayOnFlip] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(AUTOPLAY_FLIP_KEY);
-      if (saved !== null) return saved === 'true';
-      const legacy = localStorage.getItem('bleuolingo_auto_audio_v1');
-      if (legacy !== null) return legacy !== 'false';
-    }
-    return true;
-  });
-
-  // Global switch sides state
-  const [isSidesSwapped, setIsSidesSwapped] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem(SIDES_SWAPPED_KEY) === 'true';
-    }
-    return false;
-  });
-
-  // FSRS Target Retention preference (default 90% / 0.90)
-  const [targetRetention, setTargetRetention] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(TARGET_RETENTION_KEY);
-      if (saved) {
-        const val = parseFloat(saved);
-        if (!isNaN(val) && val >= 0.7 && val <= 0.98) return val;
-      }
-    }
-    return 0.9;
-  });
-
-  const handleUpdateTargetRetention = (retention: number) => {
-    setTargetRetention(retention);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(TARGET_RETENTION_KEY, String(retention));
-    }
-    persistSetting('targetRetention', retention);
-  };
-
-  const effectiveUserId = currentUser ? currentUser.uid : activeUserId;
-
-  // Daily new card limit (default 20 cards/day, 0 = No limit)
-  const [dailyNewLimit, setDailyNewLimit] = useState<number>(() => {
-    return getDailyNewCardLimit(activeUserId);
-  });
-
-  const handleUpdateDailyNewLimit = (limit: number) => {
-    setDailyNewLimit(limit);
-    saveDailyNewCardLimit(effectiveUserId, limit);
-    persistSetting('dailyNewLimit', limit);
-    setIsFlipped(false);
-  };
-
-  // Randomize new cards order preference (default false = deck order)
-  const [randomizeNewCards, setRandomizeNewCards] = useState<boolean>(() => {
-    return getRandomizeNewCards(activeUserId);
-  });
-
-  const handleToggleRandomizeNewCards = (randomize: boolean) => {
-    setRandomizeNewCards(randomize);
-    saveRandomizeNewCards(effectiveUserId, randomize);
-    persistSetting('randomizeNewCards', randomize);
-  };
-
-  // Tracking how many new cards have been introduced today
-  const [newCardsIntroducedToday, setNewCardsIntroducedToday] = useState<number>(() => {
-    return getNewCardsIntroducedToday(activeUserId);
-  });
-
-  // Today's override allowance for extra new cards
-  const [overrideNewCardsToday, setOverrideNewCardsToday] = useState<number>(() => {
-    return getTodayNewCardsOverride(activeUserId);
-  });
-
-  const handleAddTodayOverride = (additionalCount: number) => {
-    const nextCount = addTodayNewCardsOverride(effectiveUserId, additionalCount);
-    setOverrideNewCardsToday(nextCount);
-    // Reset session stats so the new batch of cards counts cleanly from 0
-    setSessionStats({
-      totalReviewed: 0,
-      againCount: 0,
-      hardCount: 0,
-      goodCount: 0,
-      easyCount: 0,
-      sessionStartTime: Date.now(),
-    });
-  };
-
-  // Keep settings synced whenever effective user changes
-  useEffect(() => {
-    setDailyNewLimit(getDailyNewCardLimit(effectiveUserId));
-    setRandomizeNewCards(getRandomizeNewCards(effectiveUserId));
-    setNewCardsIntroducedToday(getNewCardsIntroducedToday(effectiveUserId));
-    setOverrideNewCardsToday(getTodayNewCardsOverride(effectiveUserId));
-  }, [effectiveUserId]);
-
-  // Session random salt for stable card shuffling across renders
-  const [sessionSalt, setSessionSalt] = useState<string>(() => Math.random().toString(36).substring(2, 9));
-
-  // Active card flipping state
-  const [isFlipped, setIsFlipped] = useState(false);
-
-  // Mascot dynamic mood state
-  const [mascotMood, setMascotMood] = useState<'happy' | 'thinking' | 'cheering' | 'wink'>('happy');
-
-  // Session stats for tracking progress in current session
-  const [sessionStats, setSessionStats] = useState<SessionStats>({
-    totalReviewed: 0,
-    againCount: 0,
-    hardCount: 0,
-    goodCount: 0,
-    easyCount: 0,
-    sessionStartTime: Date.now(),
-  });
-
-  const [reviewAheadCardIds, setReviewAheadCardIds] = useState<string[]>([]);
-  const [isFreeStudyMode, setIsFreeStudyMode] = useState(false);
-  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-
-  // Lock flag: prevents auto-save from clobbering Firestore before cloud data has been loaded
-  const isCloudLoadedRef = useRef<boolean>(false);
-
-  // Persist helper: writes cards to either Firestore or localStorage
-  const persistCards = useCallback(
-    (cardsToSave: Flashcard[]) => {
-      if (currentUser) {
-        saveUserCardsFirestore(currentUser.uid, cardsToSave);
-      } else {
-        saveUserCards(activeUserId, cardsToSave);
-      }
-    },
-    [currentUser, activeUserId]
-  );
-
-  // Auto-save effect for FSRS review updates and background changes
+  // Single-source Auto-save for Cards
   useEffect(() => {
     if (currentUser) {
       if (isCloudLoadedRef.current) {
@@ -289,7 +158,22 @@ export default function App() {
     }
   }, [cards, activeUserId, currentUser]);
 
-  // Auth subscription: safely load remote cards without race-condition overwrites
+  // Clean reset helper
+  const resetActiveStudyState = useCallback(() => {
+    setIsFlipped(false);
+    setActiveCardId(null);
+    setSessionStats(createInitialSessionStats());
+  }, []);
+
+  // Settings Sync on Effective User Switch
+  useEffect(() => {
+    setDailyNewLimit(getDailyNewCardLimit(effectiveUserId));
+    setRandomizeNewCards(getRandomizeNewCards(effectiveUserId));
+    setNewCardsIntroducedToday(getNewCardsIntroducedToday(effectiveUserId));
+    setOverrideNewCardsToday(getTodayNewCardsOverride(effectiveUserId));
+  }, [effectiveUserId]);
+
+  // Auth Subscription
   useEffect(() => {
     let isMounted = true;
     const unsubscribe = subscribeToAuth(async (user) => {
@@ -297,104 +181,44 @@ export default function App() {
 
       if (user) {
         isCloudLoadedRef.current = false;
-
         try {
-          // 1. Fetch remote activity log
           const cloudActivity = await fetchUserActivityFirestore(user.uid);
           if (isMounted) setActivityLog(cloudActivity);
 
-          // 2. Fetch remote cards
           const cloudCards = await fetchUserCardsFirestore(user.uid);
           if (!isMounted) return;
 
           if (cloudCards && cloudCards.length > 0) {
             setCards(cloudCards);
           } else {
-            // New cloud account with 0 cards: seed existing local deck or starter deck
             const initialDeck = cards.length > 0 ? cards : STARTER_DECK.map(lowercaseCard);
             await saveUserCardsFirestore(user.uid, initialDeck);
             setCards(initialDeck);
           }
 
-          // 3. Fetch remote settings and hydrate
           const cloudSettings = await fetchUserSettingsFirestore(user.uid);
-          if (isMounted) {
-            if (cloudSettings && Object.keys(cloudSettings).length > 0) {
-              if (typeof cloudSettings.frontLanguage === 'string') {
-                setFrontLanguage(cloudSettings.frontLanguage);
-                localStorage.setItem(FRONT_LANG_KEY, cloudSettings.frontLanguage);
-              }
-              if (typeof cloudSettings.backLanguage === 'string') {
-                setBackLanguage(cloudSettings.backLanguage);
-                localStorage.setItem(BACK_LANG_KEY, cloudSettings.backLanguage);
-              }
-              if (typeof cloudSettings.autoPlayOnDisplay === 'boolean') {
-                setAutoPlayOnDisplay(cloudSettings.autoPlayOnDisplay);
-                localStorage.setItem(AUTOPLAY_DISPLAY_KEY, String(cloudSettings.autoPlayOnDisplay));
-              }
-              if (typeof cloudSettings.autoPlayOnFlip === 'boolean') {
-                setAutoPlayOnFlip(cloudSettings.autoPlayOnFlip);
-                localStorage.setItem(AUTOPLAY_FLIP_KEY, String(cloudSettings.autoPlayOnFlip));
-              }
-              if (typeof cloudSettings.isSidesSwapped === 'boolean') {
-                setIsSidesSwapped(cloudSettings.isSidesSwapped);
-                localStorage.setItem(SIDES_SWAPPED_KEY, String(cloudSettings.isSidesSwapped));
-              }
-              if (typeof cloudSettings.targetRetention === 'number') {
-                setTargetRetention(cloudSettings.targetRetention);
-                localStorage.setItem(TARGET_RETENTION_KEY, String(cloudSettings.targetRetention));
-              }
-              if (typeof cloudSettings.dailyNewLimit === 'number') {
-                setDailyNewLimit(cloudSettings.dailyNewLimit);
-                saveDailyNewCardLimit(user.uid, cloudSettings.dailyNewLimit);
-              }
-              if (typeof cloudSettings.randomizeNewCards === 'boolean') {
-                setRandomizeNewCards(cloudSettings.randomizeNewCards);
-                saveRandomizeNewCards(user.uid, cloudSettings.randomizeNewCards);
-              }
-              if (typeof cloudSettings.isSidebarCollapsed === 'boolean') {
-                setIsSidebarCollapsed(cloudSettings.isSidebarCollapsed);
-                localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(cloudSettings.isSidebarCollapsed));
-              }
-            } else {
-              // New cloud user: seed cloud with current user settings
-              await saveUserSettingsFirestore(user.uid, {
-                frontLanguage,
-                backLanguage,
-                autoPlayOnDisplay,
-                autoPlayOnFlip,
-                isSidesSwapped,
-                targetRetention,
-                dailyNewLimit,
-                randomizeNewCards,
-                isSidebarCollapsed,
-              });
-            }
+          if (isMounted && cloudSettings && Object.keys(cloudSettings).length > 0) {
+            if (cloudSettings.frontLanguage) setFrontLanguage(cloudSettings.frontLanguage);
+            if (cloudSettings.backLanguage) setBackLanguage(cloudSettings.backLanguage);
+            if (typeof cloudSettings.autoPlayOnDisplay === 'boolean') setAutoPlayOnDisplay(cloudSettings.autoPlayOnDisplay);
+            if (typeof cloudSettings.autoPlayOnFlip === 'boolean') setAutoPlayOnFlip(cloudSettings.autoPlayOnFlip);
+            if (typeof cloudSettings.isSidesSwapped === 'boolean') setIsSidesSwapped(cloudSettings.isSidesSwapped);
+            if (typeof cloudSettings.targetRetention === 'number') setTargetRetention(cloudSettings.targetRetention);
+            if (typeof cloudSettings.dailyNewLimit === 'number') setDailyNewLimit(cloudSettings.dailyNewLimit);
+            if (typeof cloudSettings.randomizeNewCards === 'boolean') setRandomizeNewCards(cloudSettings.randomizeNewCards);
+            if (typeof cloudSettings.isSidebarCollapsed === 'boolean') setIsSidebarCollapsed(cloudSettings.isSidebarCollapsed);
           }
         } catch (err) {
           console.error('Failed to sync user data from Firestore on login:', err);
         } finally {
-          if (isMounted) {
-            isCloudLoadedRef.current = true;
-          }
+          if (isMounted) isCloudLoadedRef.current = true;
         }
       } else {
-        // Sign-out: reset lock and load guest profile
         isCloudLoadedRef.current = false;
         if (isMounted) {
           setCards(loadUserCards(activeUserId));
           setActivityLog(loadActivityLog(activeUserId));
-          setDailyNewLimit(getDailyNewCardLimit(activeUserId));
-          setRandomizeNewCards(getRandomizeNewCards(activeUserId));
-          setSessionStats({
-            totalReviewed: 0,
-            againCount: 0,
-            hardCount: 0,
-            goodCount: 0,
-            easyCount: 0,
-            sessionStartTime: Date.now(),
-          });
-          setIsFlipped(false);
+          resetActiveStudyState();
         }
       }
     });
@@ -403,125 +227,10 @@ export default function App() {
       isMounted = false;
       unsubscribe();
     };
-  }, [activeUserId]);
+  }, [activeUserId, resetActiveStudyState]);
 
-  const handleSelectUser = (userId: string) => {
-    if (userId === activeUserId) return;
-    saveUserCards(activeUserId, cards);
-    saveActiveUserId(userId);
-    setUserState((prev) => ({ ...prev, activeUserId: userId }));
-    const loadedCards = loadUserCards(userId);
-    setCards(loadedCards);
-    setActivityLog(loadActivityLog(userId));
-    setDailyNewLimit(getDailyNewCardLimit(userId));
-    setRandomizeNewCards(getRandomizeNewCards(userId));
-    setNewCardsIntroducedToday(getNewCardsIntroducedToday(userId));
-    setOverrideNewCardsToday(getTodayNewCardsOverride(userId));
-    setIsFlipped(false);
-    setSessionStats({
-      totalReviewed: 0,
-      againCount: 0,
-      hardCount: 0,
-      goodCount: 0,
-      easyCount: 0,
-      sessionStartTime: Date.now(),
-    });
-  };
-
-  const handleCreateUser = (name: string) => {
-    saveUserCards(activeUserId, cards);
-    const newProfile = createUserProfile(name, profiles);
-    const updatedProfiles = [...profiles, newProfile];
-    setUserState({
-      profiles: updatedProfiles,
-      activeUserId: newProfile.id,
-    });
-    setCards(STARTER_DECK.map(lowercaseCard));
-    setActivityLog(loadActivityLog(newProfile.id));
-    setDailyNewLimit(getDailyNewCardLimit(newProfile.id));
-    setRandomizeNewCards(getRandomizeNewCards(newProfile.id));
-    setNewCardsIntroducedToday(getNewCardsIntroducedToday(newProfile.id));
-    setOverrideNewCardsToday(getTodayNewCardsOverride(newProfile.id));
-    setIsFlipped(false);
-    setSessionStats({
-      totalReviewed: 0,
-      againCount: 0,
-      hardCount: 0,
-      goodCount: 0,
-      easyCount: 0,
-      sessionStartTime: Date.now(),
-    });
-  };
-
-  const handleDeleteUser = (userIdToDelete: string) => {
-    const { updatedProfiles, nextActiveId } = deleteUserProfile(userIdToDelete, profiles);
-    setUserState({
-      profiles: updatedProfiles,
-      activeUserId: nextActiveId,
-    });
-    if (userIdToDelete === activeUserId) {
-      setCards(loadUserCards(nextActiveId));
-      setActivityLog(loadActivityLog(nextActiveId));
-      setDailyNewLimit(getDailyNewCardLimit(nextActiveId));
-      setRandomizeNewCards(getRandomizeNewCards(nextActiveId));
-      setNewCardsIntroducedToday(getNewCardsIntroducedToday(nextActiveId));
-      setOverrideNewCardsToday(getTodayNewCardsOverride(nextActiveId));
-      setIsFlipped(false);
-      setSessionStats({
-        totalReviewed: 0,
-        againCount: 0,
-        hardCount: 0,
-        goodCount: 0,
-        easyCount: 0,
-        sessionStartTime: Date.now(),
-      });
-    }
-  };
-
-  const handleRenameUser = (userId: string, newName: string) => {
-    const updatedProfiles = renameUserProfile(userId, newName, profiles);
-    setUserState((prev) => ({
-      ...prev,
-      profiles: updatedProfiles,
-    }));
-  };
-
-  const toggleAutoPlayOnDisplay = () => {
-    setAutoPlayOnDisplay((prev) => {
-      const next = !prev;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(AUTOPLAY_DISPLAY_KEY, String(next));
-      }
-      persistSetting('autoPlayOnDisplay', next);
-      return next;
-    });
-  };
-
-  const toggleAutoPlayOnFlip = () => {
-    setAutoPlayOnFlip((prev) => {
-      const next = !prev;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(AUTOPLAY_FLIP_KEY, String(next));
-      }
-      persistSetting('autoPlayOnFlip', next);
-      return next;
-    });
-  };
-
-  const handleToggleSwitchSides = () => {
-    setIsSidesSwapped((prev) => {
-      const next = !prev;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(SIDES_SWAPPED_KEY, String(next));
-      }
-      persistSetting('isSidesSwapped', next);
-      return next;
-    });
-    setIsFlipped(false);
-  };
-
-  // Card queues calculation
-  const now = Date.now();
+  // Queue Calculations (Derived safely against a stable reference time when cards/session changes)
+  const reviewAheadSet = useMemo(() => new Set(reviewAheadCardIds), [reviewAheadCardIds]);
 
   const newCardsResult = useMemo(
     () =>
@@ -538,9 +247,9 @@ export default function App() {
 
   const newCards = newCardsResult.queueNewCards;
   const unintroducedNewCardsCount = newCardsResult.unintroducedCount;
-  const allNewCardsCount = newCardsResult.allNewCardsCount;
 
-  const reviewAheadSet = useMemo(() => new Set(reviewAheadCardIds), [reviewAheadCardIds]);
+  // Use sessionStartTime or current moment for queue evaluation to prevent flip-mid-study shifts
+  const queueReferenceTime = sessionStats.sessionStartTime || Date.now();
 
   const learningCards = useMemo(
     () =>
@@ -548,28 +257,27 @@ export default function App() {
         .filter(
           (c) =>
             (c.state === 'learning' || c.state === 'relearning') &&
-            (c.due <= now || reviewAheadSet.has(c.id))
+            (c.due <= queueReferenceTime || reviewAheadSet.has(c.id))
         )
         .sort((a, b) => a.due - b.due),
-    [cards, now, reviewAheadSet]
+    [cards, queueReferenceTime, reviewAheadSet]
   );
+
   const reviewCards = useMemo(
     () =>
       cards
         .filter(
           (c) =>
             c.state === 'review' &&
-            (c.due <= now || reviewAheadSet.has(c.id))
+            (c.due <= queueReferenceTime || reviewAheadSet.has(c.id))
         )
         .sort((a, b) => a.due - b.due),
-    [cards, now, reviewAheadSet]
+    [cards, queueReferenceTime, reviewAheadSet]
   );
+
   const dueCount = useMemo(
-    () =>
-      cards.filter(
-        (c) => c.state !== 'new' && c.due <= now
-      ).length,
-    [cards, now]
+    () => cards.filter((c) => c.state !== 'new' && c.due <= queueReferenceTime).length,
+    [cards, queueReferenceTime]
   );
 
   const cardsDueAheadCount = useMemo(
@@ -577,39 +285,40 @@ export default function App() {
       cards.filter(
         (c) =>
           (c.state === 'review' || c.state === 'learning' || c.state === 'relearning') &&
-          c.due > now &&
-          c.due <= now + ONE_DAY_MS &&
+          c.due > queueReferenceTime &&
+          c.due <= queueReferenceTime + ONE_DAY_MS &&
           !reviewAheadSet.has(c.id)
       ).length,
-    [cards, now, ONE_DAY_MS, reviewAheadSet]
+    [cards, queueReferenceTime, reviewAheadSet]
   );
 
-  // One-time addition of cards scheduled within the next 24 hours to the daily queue (Anki-style)
-  const handleTriggerReviewAhead = useCallback(() => {
-    const candidateIds = cards
-      .filter(
-        (c) =>
-          (c.state === 'review' || c.state === 'learning' || c.state === 'relearning') &&
-          c.due > now &&
-          c.due <= now + ONE_DAY_MS &&
-          !reviewAheadSet.has(c.id)
-      )
-      .map((c) => c.id);
-
-    if (candidateIds.length > 0) {
-      setReviewAheadCardIds((prev) => Array.from(new Set([...prev, ...candidateIds])));
-      setIsFlipped(false);
-    }
-  }, [cards, now, ONE_DAY_MS, reviewAheadSet]);
-
-  const currentCard = useMemo(() => {
+  // Next candidate from priority queues
+  const nextCandidateCard = useMemo(() => {
     if (learningCards.length > 0) return learningCards[0];
     if (reviewCards.length > 0) return reviewCards[0];
     if (newCards.length > 0) return newCards[0];
     return null;
   }, [learningCards, reviewCards, newCards]);
 
-  // Handle rating a card with FSRS
+  // Lock the active card so newly due cards don't preempt the card currently being viewed
+  const currentCard = useMemo(() => {
+    if (activeCardId) {
+      const active = cards.find((c) => c.id === activeCardId);
+      if (active) return active;
+    }
+    return nextCandidateCard;
+  }, [activeCardId, cards, nextCandidateCard]);
+
+  // Automatically lock next candidate if idle
+  useEffect(() => {
+    if (!activeCardId && nextCandidateCard) {
+      setActiveCardId(nextCandidateCard.id);
+    } else if (activeCardId && !cards.some((c) => c.id === activeCardId)) {
+      setActiveCardId(nextCandidateCard ? nextCandidateCard.id : null);
+    }
+  }, [activeCardId, nextCandidateCard, cards]);
+
+  // Review Handler
   const handleRateCard = useCallback(
     (rating: ReviewRating) => {
       if (!currentCard) return;
@@ -623,23 +332,18 @@ export default function App() {
       const updatedProps = calculateNextFSRSState(activeCard, rating, Date.now(), targetRetention);
       const updatedCard: Flashcard = { ...activeCard, ...updatedProps };
 
-      // Record new card introduction if card was brand new
       if (activeCard.state === 'new') {
         const nextCount = recordNewCardIntroducedToday(effectiveUserId, 1);
         setNewCardsIntroducedToday(nextCount);
       }
 
       setCards((prevCards) => {
-        let nextCards: Flashcard[];
         if (rating === 1) {
-          nextCards = [...prevCards.filter((c) => c.id !== activeCard.id), updatedCard];
-        } else {
-          nextCards = prevCards.map((c) => (c.id === activeCard.id ? updatedCard : c));
+          return [...prevCards.filter((c) => c.id !== activeCard.id), updatedCard];
         }
-        return nextCards;
+        return prevCards.map((c) => (c.id === activeCard.id ? updatedCard : c));
       });
 
-      // If card was part of the one-time review-ahead batch, remove it so queue shrinks and completes
       if (reviewAheadSet.has(activeCard.id)) {
         setReviewAheadCardIds((prev) => prev.filter((id) => id !== activeCard.id));
       }
@@ -653,14 +357,15 @@ export default function App() {
         easyCount: rating === 4 ? prev.easyCount + 1 : prev.easyCount,
       }));
 
+      // Fixed: passed calculated nextLog to Firestore rather than outdated prevLog
+      const today = formatDateKey(new Date());
       if (currentUser) {
         setActivityLog((prevLog) => {
-          const today = formatDateKey(new Date());
           const nextLog: ActivityLog = {
             ...prevLog,
             [today]: (prevLog[today] || 0) + 1,
           };
-          recordReviewActivityFirestore(currentUser.uid, prevLog, 1);
+          recordReviewActivityFirestore(currentUser.uid, nextLog, 1);
           return nextLog;
         });
       } else {
@@ -668,102 +373,197 @@ export default function App() {
         setActivityLog(nextLog);
       }
 
+      // Unlock active card so queue delivers the next one
       setIsFlipped(false);
+      setActiveCardId(null);
     },
-    [currentCard, currentUser, activeUserId, targetRetention]
+    [currentCard, currentUser, effectiveUserId, activeUserId, targetRetention, reviewAheadSet]
   );
 
-  // -------------------------------------------------------------
-  // Card Mutations with Explicit Firestore Persistence Guarantees
-  // -------------------------------------------------------------
+  const handleTriggerReviewAhead = useCallback(() => {
+    const candidateIds = cards
+      .filter(
+        (c) =>
+          (c.state === 'review' || c.state === 'learning' || c.state === 'relearning') &&
+          c.due > queueReferenceTime &&
+          c.due <= queueReferenceTime + ONE_DAY_MS &&
+          !reviewAheadSet.has(c.id)
+      )
+      .map((c) => c.id);
 
-  // 1. Single Card Addition
-  const handleAddSingleCard = (newCard: Flashcard) => {
-    const cardFormatted = lowercaseCard(newCard);
-    setCards((prev) => {
-      const nextDeck = [cardFormatted, ...prev];
-      persistCards(nextDeck);
-      return nextDeck;
-    });
+    if (candidateIds.length > 0) {
+      setReviewAheadCardIds((prev) => Array.from(new Set([...prev, ...candidateIds])));
+      setIsFlipped(false);
+      setActiveCardId(null);
+    }
+  }, [cards, queueReferenceTime, reviewAheadSet]);
+
+  const handleAddTodayOverride = (additionalCount: number) => {
+    const nextCount = addTodayNewCardsOverride(effectiveUserId, additionalCount);
+    setOverrideNewCardsToday(nextCount);
+    resetActiveStudyState();
   };
 
-  // 2. Batch Cards Addition (Direct CSV clean import)
+  // Deck Modifications (Pure state updates; persistence is safely handled by the root useEffect)
+  const handleAddSingleCard = (newCard: Flashcard) => {
+    setCards((prev) => [lowercaseCard(newCard), ...prev]);
+  };
+
   const handleAddCards = (newCardsToAdd: Flashcard[]) => {
     if (newCardsToAdd.length === 0) return;
     const formatted = newCardsToAdd.map(lowercaseCard);
-    setCards((prev) => {
-      const nextDeck = [...prev, ...formatted];
-      persistCards(nextDeck);
-      return nextDeck;
-    });
+    setCards((prev) => [...prev, ...formatted]);
     setIsFlipped(false);
+    setActiveCardId(null);
   };
 
-  // 3. Deduplication Import (New + Overwritten cards)
   const handleApplyImport = (cardsToAdd: Flashcard[], cardsToUpdate: Flashcard[]) => {
     setCards((prev) => {
       const updateMap = new Map(cardsToUpdate.map((c) => [c.id, lowercaseCard(c)]));
       const updatedExisting = prev.map((c) => updateMap.get(c.id) || c);
-      const nextDeck = [...updatedExisting, ...cardsToAdd.map(lowercaseCard)];
-      persistCards(nextDeck);
-      return nextDeck;
+      return [...updatedExisting, ...cardsToAdd.map(lowercaseCard)];
     });
     setIsFlipped(false);
+    setActiveCardId(null);
   };
 
-  // 4. Update Existing Card
   const handleUpdateCard = (updatedCard: Flashcard) => {
-    const cardFormatted = lowercaseCard(updatedCard);
-    setCards((prev) => {
-      const nextDeck = prev.map((c) => (c.id === cardFormatted.id ? cardFormatted : c));
-      persistCards(nextDeck);
-      return nextDeck;
-    });
+    const formatted = lowercaseCard(updatedCard);
+    setCards((prev) => prev.map((c) => (c.id === formatted.id ? formatted : c)));
   };
 
-  // 5. Delete Card (Fixed: Guarantees removal reflects in Firestore immediately)
   const handleDeleteCard = (id: string) => {
-    setCards((prev) => {
-      const nextDeck = prev.filter((c) => c.id !== id);
-      persistCards(nextDeck);
-      return nextDeck;
-    });
+    setCards((prev) => prev.filter((c) => c.id !== id));
     setReviewAheadCardIds((prev) => prev.filter((cid) => cid !== id));
-    setIsFlipped(false);
+    if (activeCardId === id) {
+      setActiveCardId(null);
+      setIsFlipped(false);
+    }
   };
 
-  // 6. Reset Deck
   const handleResetToDefault = () => {
     const defaultDeck = STARTER_DECK.map(lowercaseCard);
     setCards(defaultDeck);
-    persistCards(defaultDeck);
     clearTodayNewCards(effectiveUserId);
     setNewCardsIntroducedToday(0);
     setOverrideNewCardsToday(0);
     setSessionSalt(Math.random().toString(36).substring(2, 9));
     setReviewAheadCardIds([]);
-    setIsFlipped(false);
-    setSessionStats({
-      totalReviewed: 0,
-      againCount: 0,
-      hardCount: 0,
-      goodCount: 0,
-      easyCount: 0,
-      sessionStartTime: Date.now(),
-    });
+    resetActiveStudyState();
   };
 
   const handleResetSession = () => {
     setSessionSalt(Math.random().toString(36).substring(2, 9));
     setReviewAheadCardIds([]);
-    setSessionStats({
-      totalReviewed: 0,
-      againCount: 0,
-      hardCount: 0,
-      goodCount: 0,
-      easyCount: 0,
-      sessionStartTime: Date.now(),
+    resetActiveStudyState();
+  };
+
+  // Profile Management
+  const handleSelectUser = (userId: string) => {
+    if (userId === activeUserId) return;
+    saveActiveUserId(userId);
+    setUserState((prev) => ({ ...prev, activeUserId: userId }));
+    setCards(loadUserCards(userId));
+    setActivityLog(loadActivityLog(userId));
+    resetActiveStudyState();
+  };
+
+  const handleCreateUser = (name: string) => {
+    const newProfile = createUserProfile(name, profiles);
+    setUserState({
+      profiles: [...profiles, newProfile],
+      activeUserId: newProfile.id,
     });
+    setCards(STARTER_DECK.map(lowercaseCard));
+    setActivityLog(loadActivityLog(newProfile.id));
+    resetActiveStudyState();
+  };
+
+  const handleDeleteUser = (userIdToDelete: string) => {
+    const { updatedProfiles, nextActiveId } = deleteUserProfile(userIdToDelete, profiles);
+    setUserState({ profiles: updatedProfiles, activeUserId: nextActiveId });
+    if (userIdToDelete === activeUserId) {
+      setCards(loadUserCards(nextActiveId));
+      setActivityLog(loadActivityLog(nextActiveId));
+      resetActiveStudyState();
+    }
+  };
+
+  const handleRenameUser = (userId: string, newName: string) => {
+    setUserState((prev) => ({
+      ...prev,
+      profiles: renameUserProfile(userId, newName, prev.profiles),
+    }));
+  };
+
+  // Setting Toggles & Handlers
+  const toggleSidebarCollapse = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem(STORAGE_KEYS.SIDEBAR_COLLAPSED, String(next));
+      persistSetting('isSidebarCollapsed', next);
+      return next;
+    });
+  };
+
+  const handleSelectFrontLanguage = (lang: string) => {
+    setFrontLanguage(lang);
+    localStorage.setItem(STORAGE_KEYS.FRONT_LANG, lang);
+    persistSetting('frontLanguage', lang);
+  };
+
+  const handleSelectBackLanguage = (lang: string) => {
+    setBackLanguage(lang);
+    localStorage.setItem(STORAGE_KEYS.BACK_LANG, lang);
+    persistSetting('backLanguage', lang);
+  };
+
+  const toggleAutoPlayOnDisplay = () => {
+    setAutoPlayOnDisplay((prev) => {
+      const next = !prev;
+      localStorage.setItem(STORAGE_KEYS.AUTOPLAY_DISPLAY, String(next));
+      persistSetting('autoPlayOnDisplay', next);
+      return next;
+    });
+  };
+
+  const toggleAutoPlayOnFlip = () => {
+    setAutoPlayOnFlip((prev) => {
+      const next = !prev;
+      localStorage.setItem(STORAGE_KEYS.AUTOPLAY_FLIP, String(next));
+      persistSetting('autoPlayOnFlip', next);
+      return next;
+    });
+  };
+
+  const handleToggleSwitchSides = () => {
+    setIsSidesSwapped((prev) => {
+      const next = !prev;
+      localStorage.setItem(STORAGE_KEYS.SIDES_SWAPPED, String(next));
+      persistSetting('isSidesSwapped', next);
+      return next;
+    });
+    setIsFlipped(false);
+  };
+
+  const handleUpdateTargetRetention = (retention: number) => {
+    setTargetRetention(retention);
+    localStorage.setItem(STORAGE_KEYS.TARGET_RETENTION, String(retention));
+    persistSetting('targetRetention', retention);
+  };
+
+  const handleUpdateDailyNewLimit = (limit: number) => {
+    setDailyNewLimit(limit);
+    saveDailyNewCardLimit(effectiveUserId, limit);
+    persistSetting('dailyNewLimit', limit);
+    setIsFlipped(false);
+    setActiveCardId(null);
+  };
+
+  const handleToggleRandomizeNewCards = (randomize: boolean) => {
+    setRandomizeNewCards(randomize);
+    saveRandomizeNewCards(effectiveUserId, randomize);
+    persistSetting('randomizeNewCards', randomize);
   };
 
   const todayKey = formatDateKey(new Date());
@@ -793,8 +593,8 @@ export default function App() {
                 {dueCount > 0
                   ? `${dueCount} cards due`
                   : newCards.length > 0
-                  ? `${newCards.length} new cards`
-                  : '0 cards due'}
+                    ? `${newCards.length} new cards`
+                    : '0 cards due'}
               </span>
             </div>
           </div>
@@ -809,11 +609,10 @@ export default function App() {
               setIsFreeStudyMode(next);
               if (next && activeTab !== 'practice') setActiveTab('practice');
             }}
-            className={`px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer ${
-              isFreeStudyMode
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer ${isFreeStudyMode
                 ? 'bg-purple-600 text-white shadow-xs'
                 : 'bg-purple-50 text-purple-700 border border-purple-200'
-            }`}
+              }`}
           >
             <BookOpen className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Free Study</span>
@@ -860,12 +659,11 @@ export default function App() {
         />
       </div>
 
-      {/* Main App Workspace Area */}
+      {/* Main Workspace */}
       <main
         id="main-app-content"
         className="flex-1 flex flex-col min-h-screen overflow-y-auto bg-[radial-gradient(ellipse_70%_70%_at_50%_0%,rgba(224,242,254,0.35),rgba(255,255,255,0))]"
       >
-        {/* Practice / Flashcard View */}
         {activeTab === 'practice' && (
           <div className="flex-1 flex flex-col w-full max-w-2xl mx-auto px-4 py-4 sm:py-6">
             {isFreeStudyMode ? (
@@ -899,11 +697,10 @@ export default function App() {
                       id="study-reverse-sides-btn"
                       onClick={handleToggleSwitchSides}
                       title={isSidesSwapped ? 'Reverse Mode: Active' : 'Reverse Mode: Inactive'}
-                      className={`h-9 px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                        isSidesSwapped
+                      className={`h-9 px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${isSidesSwapped
                           ? 'bg-blue-500 border-blue-600 text-white shadow-xs'
                           : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-2xs'
-                      }`}
+                        }`}
                     >
                       <ArrowLeftRight className="w-3.5 h-3.5" />
                       <span>Reverse</span>
@@ -946,7 +743,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Unified Deck & Import View */}
         {activeTab === 'deck' && (
           <DeckManagerView
             cards={cards}
@@ -962,7 +758,6 @@ export default function App() {
           />
         )}
 
-        {/* Dedicated Study Activity & Stats View */}
         {activeTab === 'stats' && (
           <StatsView
             activityLog={activityLog}
@@ -973,7 +768,6 @@ export default function App() {
           />
         )}
 
-        {/* Settings View */}
         {activeTab === 'settings' && (
           <SettingsView
             activeProfile={profiles.find((p) => p.id === activeUserId)}
