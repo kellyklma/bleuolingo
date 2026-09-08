@@ -187,45 +187,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           )}
         </div>
 
-        {/* Daily Progress Card */}
-        {!isCollapsed && (
-          <div className="rounded-2xl bg-gradient-to-b from-slate-50 to-blue-50/40 border border-slate-200/80 p-3.5 flex flex-col gap-2.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-500 flex items-center gap-1.5">
-                <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                Daily Progress
-              </span>
-              <span className="font-black text-blue-600">
-                {reviewedCount} reviewed
-              </span>
-            </div>
-
-            {/* Progress bar */}
-            <div className="w-full h-2 bg-slate-200/80 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-300 ${
-                  dueCount === 0 && reviewedCount > 0 ? 'bg-emerald-500' : 'bg-blue-500'
-                }`}
-                style={{
-                  width: `${
-                    dueCount === 0 && reviewedCount > 0
-                      ? 100
-                      : reviewedCount + dueCount > 0
-                      ? Math.min(100, Math.max(8, Math.round((reviewedCount / (reviewedCount + dueCount)) * 100)))
-                      : 100
-                  }%`,
-                }}
-              />
-            </div>
-
-            <div className="flex items-center justify-end text-[11px] text-slate-500 font-medium pt-0.5">
-              <span className={dueCount > 0 ? 'text-amber-600 font-bold' : 'text-emerald-600 font-bold'}>
-                {dueCount} due
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* Primary Navigation Rail */}
         <nav className="flex flex-col gap-2">
           {/* Study View */}

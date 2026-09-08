@@ -24,7 +24,7 @@ import {
 import { loadActivityLog, recordReviewActivity, ActivityLog, formatDateKey } from './lib/activityStorage';
 import { User } from 'firebase/auth';
 import { subscribeToAuth, loginWithGoogle, logout } from './lib/auth';
-import { ArrowLeftRight, BookOpen, Menu, X } from 'lucide-react';
+import { ArrowLeftRight, BookOpen, Menu, X, Loader2 } from 'lucide-react';
 import {
   fetchUserCardsFirestore,
   saveUserCardsFirestore,
@@ -70,6 +70,7 @@ const createInitialSessionStats = (): SessionStats => ({
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
 
   // Per-user profiles state
   const [userState, setUserState] = useState<{ profiles: UserProfile[]; activeUserId: string }>(
@@ -84,7 +85,7 @@ export default function App() {
     loadActivityLog(userState.activeUserId)
   );
 
-  // Active Review State (Locked Card ID fixes the flip-replacement bug)
+  // Active Review State
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [isFlipped, setIsFlipped] = useState(false);
   const [mascotMood, setMascotMood] = useState<'happy' | 'thinking' | 'cheering' | 'wink'>('happy');
@@ -158,7 +159,6 @@ export default function App() {
     }
   }, [cards, activeUserId, currentUser]);
 
-  // Clean reset helper
   const resetActiveStudyState = useCallback(() => {
     setIsFlipped(false);
     setActiveCardId(null);
@@ -173,7 +173,7 @@ export default function App() {
     setOverrideNewCardsToday(getTodayNewCardsOverride(effectiveUserId));
   }, [effectiveUserId]);
 
-  // Auth Subscription
+  // Auth Subscription with Load Guard
   useEffect(() => {
     let isMounted = true;
     const unsubscribe = subscribeToAuth(async (user) => {
@@ -211,7 +211,10 @@ export default function App() {
         } catch (err) {
           console.error('Failed to sync user data from Firestore on login:', err);
         } finally {
-          if (isMounted) isCloudLoadedRef.current = true;
+          if (isMounted) {
+            isCloudLoadedRef.current = true;
+            setIsAuthLoading(false);
+          }
         }
       } else {
         isCloudLoadedRef.current = false;
@@ -219,6 +222,7 @@ export default function App() {
           setCards(loadUserCards(activeUserId));
           setActivityLog(loadActivityLog(activeUserId));
           resetActiveStudyState();
+          setIsAuthLoading(false);
         }
       }
     });
@@ -248,7 +252,6 @@ export default function App() {
   const newCards = newCardsResult.queueNewCards;
   const unintroducedNewCardsCount = newCardsResult.unintroducedCount;
 
-  // Use session reference time to avoid jumping queues on mid-review renders
   const queueReferenceTime = sessionStats.sessionStartTime || Date.now();
 
   const learningCards = useMemo(
@@ -275,13 +278,8 @@ export default function App() {
     [cards, queueReferenceTime, reviewAheadSet]
   );
 
-  const dueCount = useMemo(
-    () => cards.filter((c) => c.state !== 'new' && c.due <= queueReferenceTime).length,
-    [cards, queueReferenceTime]
-  );
-
-  // Total remaining workload for today (Due cards + allowed New cards)
-  const totalToStudy = dueCount + newCards.length;
+  // Total items scheduled to be studied today
+  const totalToStudy = learningCards.length + reviewCards.length + newCards.length;
 
   const cardsDueAheadCount = useMemo(
     () =>
@@ -295,7 +293,6 @@ export default function App() {
     [cards, queueReferenceTime, reviewAheadSet]
   );
 
-  // Next candidate from priority queues
   const nextCandidateCard = useMemo(() => {
     if (learningCards.length > 0) return learningCards[0];
     if (reviewCards.length > 0) return reviewCards[0];
@@ -303,7 +300,6 @@ export default function App() {
     return null;
   }, [learningCards, reviewCards, newCards]);
 
-  // Lock active card to prevent premature preemption during flips
   const currentCard = useMemo(() => {
     if (activeCardId) {
       const active = cards.find((c) => c.id === activeCardId);
@@ -312,7 +308,6 @@ export default function App() {
     return nextCandidateCard;
   }, [activeCardId, cards, nextCandidateCard]);
 
-  // Sync activeCardId
   useEffect(() => {
     if (!activeCardId && nextCandidateCard) {
       setActiveCardId(nextCandidateCard.id);
@@ -321,7 +316,6 @@ export default function App() {
     }
   }, [activeCardId, nextCandidateCard, cards]);
 
-  // Review Handler
   const handleRateCard = useCallback(
     (rating: ReviewRating) => {
       if (!currentCard) return;
@@ -405,7 +399,6 @@ export default function App() {
     resetActiveStudyState();
   };
 
-  // Deck Modifications
   const handleAddSingleCard = (newCard: Flashcard) => {
     setCards((prev) => [lowercaseCard(newCard), ...prev]);
   };
@@ -459,7 +452,6 @@ export default function App() {
     resetActiveStudyState();
   };
 
-  // Profile Management
   const handleSelectUser = (userId: string) => {
     if (userId === activeUserId) return;
     saveActiveUserId(userId);
@@ -497,7 +489,6 @@ export default function App() {
     }));
   };
 
-  // Settings Handlers
   const toggleSidebarCollapse = () => {
     setIsSidebarCollapsed((prev) => {
       const next = !prev;
@@ -575,28 +566,13 @@ export default function App() {
       id="app-root-layout"
       className="min-h-screen bg-slate-50/70 text-slate-900 flex flex-col md:flex-row font-sans selection:bg-blue-100 selection:text-blue-900"
     >
-      {/* Mobile Top Header */}
-      <header className="md:hidden flex items-center justify-between p-4 bg-white border-b border-slate-200/80 sticky top-0 z-40">
+      {/* Clean Mobile Top Header: Mascot & Logo + Controls only */}
+      <header className="md:hidden flex items-center justify-between p-3.5 bg-white border-b border-slate-200/80 sticky top-0 z-40">
         <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200/80 flex items-center justify-center p-0.5">
+          <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200/80 flex items-center justify-center p-0.5">
             <BleuoMascot mood={mascotMood} size="sm" />
           </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-black text-slate-900 text-base">Bleuolingo</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-semibold">
-              <span className="text-slate-700 font-bold">
-                {currentUser?.displayName || profiles.find((p) => p.id === activeUserId)?.name || 'Guest'}
-              </span>
-              <span>•</span>
-              <span>
-                {totalToStudy > 0
-                  ? `${totalToStudy} ${totalToStudy === 1 ? 'card' : 'cards'} to study`
-                  : 'All caught up!'}
-              </span>
-            </div>
-          </div>
+          <span className="font-black text-slate-900 text-base tracking-tight">Bleuolingo</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -622,6 +598,7 @@ export default function App() {
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="p-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer"
+            aria-label="Open menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
@@ -636,8 +613,8 @@ export default function App() {
             setActiveTab(tab);
             setMobileMenuOpen(false);
           }}
-          dueCount={totalToStudy}
-          newCount={newCards.length}
+          dueCount={isAuthLoading ? 0 : totalToStudy}
+          newCount={isAuthLoading ? 0 : newCards.length}
           totalCards={cards.length}
           reviewedCount={todayReviewedCount}
           activityLog={activityLog}
@@ -658,133 +635,144 @@ export default function App() {
         />
       </div>
 
-      {/* Main Workspace */}
+      {/* Main Workspace Area */}
       <main
         id="main-app-content"
         className="flex-1 flex flex-col min-h-screen overflow-y-auto bg-[radial-gradient(ellipse_70%_70%_at_50%_0%,rgba(224,242,254,0.35),rgba(255,255,255,0))]"
       >
-        {activeTab === 'practice' && (
-          <div className="flex-1 flex flex-col w-full max-w-2xl mx-auto px-4 py-4 sm:py-6">
-            {isFreeStudyMode ? (
-              <FreeStudyView
+        {isAuthLoading ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 gap-3">
+            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              Loading your deck...
+            </span>
+          </div>
+        ) : (
+          <>
+            {activeTab === 'practice' && (
+              <div className="flex-1 flex flex-col w-full max-w-2xl mx-auto px-4 py-4 sm:py-6">
+                {isFreeStudyMode ? (
+                  <FreeStudyView
+                    cards={cards}
+                    isSidesSwapped={isSidesSwapped}
+                    onToggleSwitchSides={handleToggleSwitchSides}
+                    onExitFreeStudy={() => setIsFreeStudyMode(false)}
+                    frontLanguage={frontLanguage}
+                    backLanguage={backLanguage}
+                    autoPlayOnDisplay={autoPlayOnDisplay}
+                    autoPlayOnFlip={autoPlayOnFlip}
+                    onUpdateCard={handleUpdateCard}
+                  />
+                ) : (
+                  <>
+                    <div className="w-full flex items-center justify-between gap-3 mb-3">
+                      <div className="flex-1">
+                        <SessionProgress
+                          reviewedThisSession={sessionStats.totalReviewed}
+                          newCount={newCards.length}
+                          learningCount={learningCards.length}
+                          reviewCount={reviewCards.length}
+                          totalDeckSize={cards.length}
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          id="study-reverse-sides-btn"
+                          onClick={handleToggleSwitchSides}
+                          title={isSidesSwapped ? 'Reverse Mode: Active' : 'Reverse Mode: Inactive'}
+                          className={`h-9 px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${isSidesSwapped
+                              ? 'bg-blue-500 border-blue-600 text-white shadow-xs'
+                              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-2xs'
+                            }`}
+                        >
+                          <ArrowLeftRight className="w-3.5 h-3.5" />
+                          <span>Reverse</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 flex flex-col justify-start mt-1 sm:mt-2">
+                      {currentCard ? (
+                        <FlashcardView
+                          card={currentCard}
+                          isFlipped={isFlipped}
+                          onFlip={() => setIsFlipped(true)}
+                          onRate={handleRateCard}
+                          autoPlayOnDisplay={autoPlayOnDisplay}
+                          autoPlayOnFlip={autoPlayOnFlip}
+                          isSidesSwapped={isSidesSwapped}
+                          frontLanguage={frontLanguage}
+                          backLanguage={backLanguage}
+                          targetRetention={targetRetention}
+                          onDeleteCard={handleDeleteCard}
+                          onUpdateCard={handleUpdateCard}
+                        />
+                      ) : (
+                        <SessionComplete
+                          stats={sessionStats}
+                          onReviewAhead={handleTriggerReviewAhead}
+                          cardsDueAheadCount={cardsDueAheadCount}
+                          onAddTodayOverride={handleAddTodayOverride}
+                          unintroducedNewCardsCount={unintroducedNewCardsCount}
+                          newCardsIntroducedToday={newCardsIntroducedToday}
+                          dailyNewLimit={dailyNewLimit}
+                          onStartFreeStudy={() => setIsFreeStudyMode(true)}
+                          onRestartSession={handleResetSession}
+                        />
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'deck' && (
+              <DeckManagerView
                 cards={cards}
-                isSidesSwapped={isSidesSwapped}
-                onToggleSwitchSides={handleToggleSwitchSides}
-                onExitFreeStudy={() => setIsFreeStudyMode(false)}
                 frontLanguage={frontLanguage}
                 backLanguage={backLanguage}
-                autoPlayOnDisplay={autoPlayOnDisplay}
-                autoPlayOnFlip={autoPlayOnFlip}
+                onSelectFrontLanguage={handleSelectFrontLanguage}
+                onSelectBackLanguage={handleSelectBackLanguage}
+                onAddCard={handleAddSingleCard}
+                onAddCards={handleAddCards}
+                onApplyImport={handleApplyImport}
                 onUpdateCard={handleUpdateCard}
+                onDeleteCard={handleDeleteCard}
               />
-            ) : (
-              <>
-                <div className="w-full flex items-center justify-between gap-3 mb-3">
-                  <div className="flex-1">
-                    <SessionProgress
-                      reviewedThisSession={sessionStats.totalReviewed}
-                      newCount={newCards.length}
-                      learningCount={learningCards.length}
-                      reviewCount={reviewCards.length}
-                      totalDeckSize={cards.length}
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      id="study-reverse-sides-btn"
-                      onClick={handleToggleSwitchSides}
-                      title={isSidesSwapped ? 'Reverse Mode: Active' : 'Reverse Mode: Inactive'}
-                      className={`h-9 px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${isSidesSwapped
-                          ? 'bg-blue-500 border-blue-600 text-white shadow-xs'
-                          : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-2xs'
-                        }`}
-                    >
-                      <ArrowLeftRight className="w-3.5 h-3.5" />
-                      <span>Reverse</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex-1 flex flex-col justify-start mt-1 sm:mt-2">
-                  {currentCard ? (
-                    <FlashcardView
-                      card={currentCard}
-                      isFlipped={isFlipped}
-                      onFlip={() => setIsFlipped(true)}
-                      onRate={handleRateCard}
-                      autoPlayOnDisplay={autoPlayOnDisplay}
-                      autoPlayOnFlip={autoPlayOnFlip}
-                      isSidesSwapped={isSidesSwapped}
-                      frontLanguage={frontLanguage}
-                      backLanguage={backLanguage}
-                      targetRetention={targetRetention}
-                      onDeleteCard={handleDeleteCard}
-                      onUpdateCard={handleUpdateCard}
-                    />
-                  ) : (
-                    <SessionComplete
-                      stats={sessionStats}
-                      onReviewAhead={handleTriggerReviewAhead}
-                      cardsDueAheadCount={cardsDueAheadCount}
-                      onAddTodayOverride={handleAddTodayOverride}
-                      unintroducedNewCardsCount={unintroducedNewCardsCount}
-                      newCardsIntroducedToday={newCardsIntroducedToday}
-                      dailyNewLimit={dailyNewLimit}
-                      onStartFreeStudy={() => setIsFreeStudyMode(true)}
-                      onRestartSession={handleResetSession}
-                    />
-                  )}
-                </div>
-              </>
             )}
-          </div>
-        )}
 
-        {activeTab === 'deck' && (
-          <DeckManagerView
-            cards={cards}
-            frontLanguage={frontLanguage}
-            backLanguage={backLanguage}
-            onSelectFrontLanguage={handleSelectFrontLanguage}
-            onSelectBackLanguage={handleSelectBackLanguage}
-            onAddCard={handleAddSingleCard}
-            onAddCards={handleAddCards}
-            onApplyImport={handleApplyImport}
-            onUpdateCard={handleUpdateCard}
-            onDeleteCard={handleDeleteCard}
-          />
-        )}
+            {activeTab === 'stats' && (
+              <StatsView
+                activityLog={activityLog}
+                cards={cards}
+                sessionStats={sessionStats}
+                todayReviewedCount={todayReviewedCount}
+                dueCount={reviewCards.length}
+              />
+            )}
 
-        {activeTab === 'stats' && (
-          <StatsView
-            activityLog={activityLog}
-            cards={cards}
-            sessionStats={sessionStats}
-            todayReviewedCount={todayReviewedCount}
-            dueCount={dueCount}
-          />
-        )}
-
-        {activeTab === 'settings' && (
-          <SettingsView
-            activeProfile={profiles.find((p) => p.id === activeUserId)}
-            totalCards={cards.length}
-            activityLog={activityLog}
-            autoPlayOnDisplay={autoPlayOnDisplay}
-            onToggleAutoPlayOnDisplay={toggleAutoPlayOnDisplay}
-            autoPlayOnFlip={autoPlayOnFlip}
-            onToggleAutoPlayOnFlip={toggleAutoPlayOnFlip}
-            targetRetention={targetRetention}
-            onUpdateTargetRetention={handleUpdateTargetRetention}
-            dailyNewLimit={dailyNewLimit}
-            onUpdateDailyNewLimit={handleUpdateDailyNewLimit}
-            randomizeNewCards={randomizeNewCards}
-            onToggleRandomizeNewCards={handleToggleRandomizeNewCards}
-            onResetToDefault={handleResetToDefault}
-            isCloudSynced={!!currentUser}
-          />
+            {activeTab === 'settings' && (
+              <SettingsView
+                activeProfile={profiles.find((p) => p.id === activeUserId)}
+                totalCards={cards.length}
+                activityLog={activityLog}
+                autoPlayOnDisplay={autoPlayOnDisplay}
+                onToggleAutoPlayOnDisplay={toggleAutoPlayOnDisplay}
+                autoPlayOnFlip={autoPlayOnFlip}
+                onToggleAutoPlayOnFlip={toggleAutoPlayOnFlip}
+                targetRetention={targetRetention}
+                onUpdateTargetRetention={handleUpdateTargetRetention}
+                dailyNewLimit={dailyNewLimit}
+                onUpdateDailyNewLimit={handleUpdateDailyNewLimit}
+                randomizeNewCards={randomizeNewCards}
+                onToggleRandomizeNewCards={handleToggleRandomizeNewCards}
+                onResetToDefault={handleResetToDefault}
+                isCloudSynced={!!currentUser}
+              />
+            )}
+          </>
         )}
       </main>
     </div>
