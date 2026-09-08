@@ -39,6 +39,7 @@ export interface SessionStats {
   goodCount: number;
   easyCount: number;
   sessionStartTime: number;
+  sessionDateKey: string; // Calendar date key for strict midnight reset
 }
 
 export interface FSRSRatingOption {
@@ -61,4 +62,3 @@ export interface UserProfile {
   avatarColor: string;
   createdAt: number;
 }
-

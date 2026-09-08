@@ -67,6 +67,7 @@ const createInitialSessionStats = (): SessionStats => ({
   goodCount: 0,
   easyCount: 0,
   sessionStartTime: Date.now(),
+  sessionDateKey: formatDateKey(new Date()),
 });
 
 export default function App() {
@@ -215,6 +216,24 @@ export default function App() {
     setIsFlipped(false);
     setActiveCardId(null);
     setSessionStats(createInitialSessionStats());
+  }, []);
+
+  // Strict Midnight Reset: checks when user focuses or returns to the tab
+  useEffect(() => {
+    const handleCheckMidnight = () => {
+      const today = formatDateKey(new Date());
+      setSessionStats((prev) => {
+        if (prev.sessionDateKey && prev.sessionDateKey !== today) {
+          setIsFlipped(false);
+          setActiveCardId(null);
+          return createInitialSessionStats();
+        }
+        return prev;
+      });
+    };
+
+    window.addEventListener('focus', handleCheckMidnight);
+    return () => window.removeEventListener('focus', handleCheckMidnight);
   }, []);
 
   // Settings Sync on Effective User Switch
@@ -378,6 +397,7 @@ export default function App() {
     (rating: ReviewRating) => {
       if (!currentCard) return;
       const activeCard = currentCard;
+      const today = formatDateKey(new Date());
 
       if (rating === 4) setMascotMood('cheering');
       else if (rating === 3) setMascotMood('wink');
@@ -403,16 +423,22 @@ export default function App() {
         setReviewAheadCardIds((prev) => prev.filter((id) => id !== activeCard.id));
       }
 
-      setSessionStats((prev) => ({
-        ...prev,
-        totalReviewed: prev.totalReviewed + 1,
-        againCount: rating === 1 ? prev.againCount + 1 : prev.againCount,
-        hardCount: rating === 2 ? prev.hardCount + 1 : prev.hardCount,
-        goodCount: rating === 3 ? prev.goodCount + 1 : prev.goodCount,
-        easyCount: rating === 4 ? prev.easyCount + 1 : prev.easyCount,
-      }));
+      // Check if calendar date changed mid-review
+      setSessionStats((prev) => {
+        const isNewDay = prev.sessionDateKey !== today;
+        const base = isNewDay ? createInitialSessionStats() : prev;
 
-      const today = formatDateKey(new Date());
+        return {
+          ...base,
+          sessionDateKey: today,
+          totalReviewed: base.totalReviewed + 1,
+          againCount: rating === 1 ? base.againCount + 1 : base.againCount,
+          hardCount: rating === 2 ? base.hardCount + 1 : base.hardCount,
+          goodCount: rating === 3 ? base.goodCount + 1 : base.goodCount,
+          easyCount: rating === 4 ? base.easyCount + 1 : base.easyCount,
+        };
+      });
+
       if (currentUser) {
         setActivityLog((prevLog) => {
           const nextLog: ActivityLog = {
@@ -451,10 +477,12 @@ export default function App() {
     }
   }, [cards, queueReferenceTime, reviewAheadSet]);
 
+  // Retains existing sessionStats and extends the progress target
   const handleAddTodayOverride = (additionalCount: number) => {
     const nextCount = addTodayNewCardsOverride(effectiveUserId, additionalCount);
     setOverrideNewCardsToday(nextCount);
-    resetActiveStudyState();
+    setIsFlipped(false);
+    setActiveCardId(null);
   };
 
   const handleAddSingleCard = (newCard: Flashcard) => {
@@ -664,11 +692,10 @@ export default function App() {
         role={mobileMenuOpen ? 'dialog' : undefined}
         aria-modal={mobileMenuOpen || undefined}
         aria-label={mobileMenuOpen ? 'Navigation menu' : undefined}
-        className={`${
-          mobileMenuOpen
+        className={`${mobileMenuOpen
             ? 'fixed inset-y-0 right-0 z-50 w-[min(22rem,calc(100vw-3rem))] overflow-y-auto bg-white shadow-2xl'
             : 'hidden'
-        } md:static md:block md:w-auto md:overflow-visible md:bg-transparent md:shadow-none`}
+          } md:static md:block md:w-auto md:overflow-visible md:bg-transparent md:shadow-none`}
       >
         <AppSidebar
           activeTab={activeTab}
