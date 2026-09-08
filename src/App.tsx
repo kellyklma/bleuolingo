@@ -229,7 +229,7 @@ export default function App() {
     };
   }, [activeUserId, resetActiveStudyState]);
 
-  // Queue Calculations (Derived safely against a stable reference time when cards/session changes)
+  // Queue Calculations
   const reviewAheadSet = useMemo(() => new Set(reviewAheadCardIds), [reviewAheadCardIds]);
 
   const newCardsResult = useMemo(
@@ -248,7 +248,7 @@ export default function App() {
   const newCards = newCardsResult.queueNewCards;
   const unintroducedNewCardsCount = newCardsResult.unintroducedCount;
 
-  // Use sessionStartTime or current moment for queue evaluation to prevent flip-mid-study shifts
+  // Use session reference time to avoid jumping queues on mid-review renders
   const queueReferenceTime = sessionStats.sessionStartTime || Date.now();
 
   const learningCards = useMemo(
@@ -280,6 +280,9 @@ export default function App() {
     [cards, queueReferenceTime]
   );
 
+  // Total remaining workload for today (Due cards + allowed New cards)
+  const totalToStudy = dueCount + newCards.length;
+
   const cardsDueAheadCount = useMemo(
     () =>
       cards.filter(
@@ -300,7 +303,7 @@ export default function App() {
     return null;
   }, [learningCards, reviewCards, newCards]);
 
-  // Lock the active card so newly due cards don't preempt the card currently being viewed
+  // Lock active card to prevent premature preemption during flips
   const currentCard = useMemo(() => {
     if (activeCardId) {
       const active = cards.find((c) => c.id === activeCardId);
@@ -309,7 +312,7 @@ export default function App() {
     return nextCandidateCard;
   }, [activeCardId, cards, nextCandidateCard]);
 
-  // Automatically lock next candidate if idle
+  // Sync activeCardId
   useEffect(() => {
     if (!activeCardId && nextCandidateCard) {
       setActiveCardId(nextCandidateCard.id);
@@ -357,7 +360,6 @@ export default function App() {
         easyCount: rating === 4 ? prev.easyCount + 1 : prev.easyCount,
       }));
 
-      // Fixed: passed calculated nextLog to Firestore rather than outdated prevLog
       const today = formatDateKey(new Date());
       if (currentUser) {
         setActivityLog((prevLog) => {
@@ -373,7 +375,6 @@ export default function App() {
         setActivityLog(nextLog);
       }
 
-      // Unlock active card so queue delivers the next one
       setIsFlipped(false);
       setActiveCardId(null);
     },
@@ -404,7 +405,7 @@ export default function App() {
     resetActiveStudyState();
   };
 
-  // Deck Modifications (Pure state updates; persistence is safely handled by the root useEffect)
+  // Deck Modifications
   const handleAddSingleCard = (newCard: Flashcard) => {
     setCards((prev) => [lowercaseCard(newCard), ...prev]);
   };
@@ -496,7 +497,7 @@ export default function App() {
     }));
   };
 
-  // Setting Toggles & Handlers
+  // Settings Handlers
   const toggleSidebarCollapse = () => {
     setIsSidebarCollapsed((prev) => {
       const next = !prev;
@@ -590,11 +591,9 @@ export default function App() {
               </span>
               <span>•</span>
               <span>
-                {dueCount > 0
-                  ? `${dueCount} cards due`
-                  : newCards.length > 0
-                    ? `${newCards.length} new cards`
-                    : '0 cards due'}
+                {totalToStudy > 0
+                  ? `${totalToStudy} ${totalToStudy === 1 ? 'card' : 'cards'} to study`
+                  : 'All caught up!'}
               </span>
             </div>
           </div>
@@ -637,7 +636,7 @@ export default function App() {
             setActiveTab(tab);
             setMobileMenuOpen(false);
           }}
-          dueCount={dueCount}
+          dueCount={totalToStudy}
           newCount={newCards.length}
           totalCards={cards.length}
           reviewedCount={todayReviewedCount}
