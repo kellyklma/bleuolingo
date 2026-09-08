@@ -55,6 +55,7 @@ const STORAGE_KEYS = {
   FRONT_LANG: 'bleuolingo_front_lang_v1',
   BACK_LANG: 'bleuolingo_back_lang_v1',
   TARGET_RETENTION: 'bleuolingo_target_retention_v1',
+  LAST_AUTH_UID: 'bleuolingo_last_auth_uid_v1',
 } as const;
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -79,11 +80,16 @@ export default function App() {
   const { profiles, activeUserId } = userState;
   const effectiveUserId = currentUser ? currentUser.uid : activeUserId;
 
-  // Deck & Activity
-  const [cards, setCards] = useState<Flashcard[]>(() => loadUserCards(userState.activeUserId));
-  const [activityLog, setActivityLog] = useState<ActivityLog>(() =>
-    loadActivityLog(userState.activeUserId)
-  );
+  // Hydrate with last known UID to prevent 0-flicker on refresh
+  const [cards, setCards] = useState<Flashcard[]>(() => {
+    const cachedUid = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.LAST_AUTH_UID) : null;
+    return loadUserCards(cachedUid || userState.activeUserId);
+  });
+
+  const [activityLog, setActivityLog] = useState<ActivityLog>(() => {
+    const cachedUid = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.LAST_AUTH_UID) : null;
+    return loadActivityLog(cachedUid || userState.activeUserId);
+  });
 
   // Active Review State
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
@@ -182,6 +188,10 @@ export default function App() {
       if (user) {
         isCloudLoadedRef.current = false;
         try {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(STORAGE_KEYS.LAST_AUTH_UID, user.uid);
+          }
+
           const cloudActivity = await fetchUserActivityFirestore(user.uid);
           if (isMounted) setActivityLog(cloudActivity);
 
@@ -218,6 +228,9 @@ export default function App() {
         }
       } else {
         isCloudLoadedRef.current = false;
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(STORAGE_KEYS.LAST_AUTH_UID);
+        }
         if (isMounted) {
           setCards(loadUserCards(activeUserId));
           setActivityLog(loadActivityLog(activeUserId));
@@ -278,7 +291,6 @@ export default function App() {
     [cards, queueReferenceTime, reviewAheadSet]
   );
 
-  // Total items scheduled to be studied today
   const totalToStudy = learningCards.length + reviewCards.length + newCards.length;
 
   const cardsDueAheadCount = useMemo(
@@ -566,7 +578,7 @@ export default function App() {
       id="app-root-layout"
       className="min-h-screen bg-slate-50/70 text-slate-900 flex flex-col md:flex-row font-sans selection:bg-blue-100 selection:text-blue-900"
     >
-      {/* Clean Mobile Top Header: Mascot & Logo + Controls only */}
+      {/* Clean Mobile Top Header (No distracting badges or user text) */}
       <header className="md:hidden flex items-center justify-between p-3.5 bg-white border-b border-slate-200/80 sticky top-0 z-40">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200/80 flex items-center justify-center p-0.5">
@@ -605,7 +617,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* Sidebar Navigation */}
+      {/* Sidebar Navigation: Tracks Individual Queues (New / Learn / Review) */}
       <div className={`${mobileMenuOpen ? 'block' : 'hidden'} md:block`}>
         <AppSidebar
           activeTab={activeTab}
@@ -615,8 +627,10 @@ export default function App() {
           }}
           dueCount={isAuthLoading ? 0 : totalToStudy}
           newCount={isAuthLoading ? 0 : newCards.length}
+          learningCount={isAuthLoading ? 0 : learningCards.length}
+          reviewCount={isAuthLoading ? 0 : reviewCards.length}
           totalCards={cards.length}
-          reviewedCount={todayReviewedCount}
+          reviewedCount={isAuthLoading ? null : todayReviewedCount}
           activityLog={activityLog}
           mascotMood={mascotMood}
           profiles={profiles}
@@ -632,6 +646,7 @@ export default function App() {
           onLogout={logout}
           isFreeStudyMode={isFreeStudyMode}
           onToggleFreeStudy={setIsFreeStudyMode}
+          isAuthLoading={isAuthLoading}
         />
       </div>
 
@@ -665,6 +680,7 @@ export default function App() {
                   />
                 ) : (
                   <>
+                    {/* Top Progress & Controls Row */}
                     <div className="w-full flex items-center justify-between gap-3 mb-3">
                       <div className="flex-1">
                         <SessionProgress
@@ -672,7 +688,6 @@ export default function App() {
                           newCount={newCards.length}
                           learningCount={learningCards.length}
                           reviewCount={reviewCards.length}
-                          totalDeckSize={cards.length}
                         />
                       </div>
 
@@ -693,6 +708,7 @@ export default function App() {
                       </div>
                     </div>
 
+                    {/* Flashcard Arena */}
                     <div className="flex-1 flex flex-col justify-start mt-1 sm:mt-2">
                       {currentCard ? (
                         <FlashcardView
