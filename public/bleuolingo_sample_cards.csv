@@ -3,7 +3,7 @@ je,i,word
 tu,you,word
 il,he,word
 elle,she,word
-on,we (informal),word
+on,we (informal) / one / people,word
 nous,we (formal),word
 vous,you / you all (formal),word
 ils,they (masculine),word
@@ -87,11 +87,14 @@ je suis,i am,phrase
 tu es,"you are (singular, informal)",phrase
 il / elle / on est,he / she / we are (informal),phrase
 nous sommes,we are (formal),phrase
-vous êtes,"you are (plural, formal)",phrase
+vous êtes,you are (plural / formal),phrase
 "ils / elles sont (""sohn"")",they are,phrase
 j'ai,i have,phrase
 tu as,"you have (singular, informal)",phrase
 il / elle / on a,he / she / we have (informal),phrase
 nous avons,we have (formal),phrase
-vous avez,"you have (plural, formal)",phrase
+vous avez,you have (plural / formal),phrase
 "ils / elles ont (""zohn"")",they have,phrase
+une baguette,a baguette,word
+musclé / muscleé,muscular,word
+trop,too / so / super (informal),word
