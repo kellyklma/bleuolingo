@@ -24,7 +24,7 @@ import {
 import { loadActivityLog, recordReviewActivity, ActivityLog, formatDateKey } from './lib/activityStorage';
 import { User } from 'firebase/auth';
 import { subscribeToAuth, loginWithGoogle, logout } from './lib/auth';
-import { ArrowLeftRight, BookOpen, Menu, X, Loader2 } from 'lucide-react';
+import { ArrowLeftRight, Menu, X, Loader2 } from 'lucide-react';
 import {
   fetchUserCardsFirestore,
   saveUserCardsFirestore,
@@ -96,6 +96,8 @@ export default function App() {
   // Navigation & Modes
   const [activeTab, setActiveTab] = useState<NavigationTab>('practice');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileDrawerRef = useRef<HTMLDivElement>(null);
   const [isFreeStudyMode, setIsFreeStudyMode] = useState(false);
 
   // User Settings
@@ -147,6 +149,50 @@ export default function App() {
     },
     [currentUser]
   );
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const focusableSelector =
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMobileMenuOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+
+      const focusableElements = Array.from(
+        mobileDrawerRef.current?.querySelectorAll<HTMLElement>(focusableSelector) ?? []
+      );
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (!firstElement || !lastElement) {
+        event.preventDefault();
+      } else if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    };
+
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleKeyDown);
+    window.setTimeout(() => {
+      mobileDrawerRef.current?.querySelector<HTMLElement>(focusableSelector)?.focus();
+    }, 0);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+      window.setTimeout(() => mobileMenuButtonRef.current?.focus(), 0);
+    };
+  }, [mobileMenuOpen]);
 
   // Single-source Auto-save for Cards
   useEffect(() => {
@@ -575,38 +621,43 @@ export default function App() {
           <span className="font-black text-slate-900 text-base tracking-tight">Bleuolingo</span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="shrink-0">
           <button
+            ref={mobileMenuButtonRef}
             type="button"
-            id="mobile-free-study-toggle-btn"
-            onClick={() => {
-              const next = !isFreeStudyMode;
-              setIsFreeStudyMode(next);
-              if (next && activeTab !== 'practice') setActiveTab('practice');
-            }}
-            className={`px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer ${isFreeStudyMode
-                ? 'bg-purple-600 text-white shadow-xs'
-                : 'bg-purple-50 text-purple-700 border border-purple-200'
-              }`}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Free Study</span>
-            <span>{isFreeStudyMode ? 'ON' : 'OFF'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            onClick={() => setMobileMenuOpen((isOpen) => !isOpen)}
             className="p-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer"
-            aria-label="Open menu"
+            aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-controls="mobile-navigation-drawer"
+            aria-expanded={mobileMenuOpen}
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
       </header>
 
-      {/* Sidebar Navigation */}
-      <div className={`${mobileMenuOpen ? 'block' : 'hidden'} md:block`}>
+      {mobileMenuOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-slate-950/35 backdrop-blur-[1px] md:hidden"
+          aria-label="Close navigation menu"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar Navigation: slide-over drawer on mobile, persistent rail on desktop */}
+      <div
+        id="mobile-navigation-drawer"
+        ref={mobileDrawerRef}
+        role={mobileMenuOpen ? 'dialog' : undefined}
+        aria-modal={mobileMenuOpen || undefined}
+        aria-label={mobileMenuOpen ? 'Navigation menu' : undefined}
+        className={`${
+          mobileMenuOpen
+            ? 'fixed inset-y-0 right-0 z-50 w-[min(22rem,calc(100vw-3rem))] overflow-y-auto bg-white shadow-2xl'
+            : 'hidden'
+        } md:static md:block md:w-auto md:overflow-visible md:bg-transparent md:shadow-none`}
+      >
         <AppSidebar
           activeTab={activeTab}
           onSelectTab={(tab) => {
