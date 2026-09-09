@@ -9,6 +9,7 @@ A minimalist flashcard web app for language learning using the Free Spaced Repet
 - Recall rate in "session complete" UI always says good even for low percentages
 
 ## Feature requests, highest to lowest priority
+- Accent-insensitive deck search
 - Undo import
 - Study by tag
 - Simplify the overwrite UI
