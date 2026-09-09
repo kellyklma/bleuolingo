@@ -44,9 +44,9 @@ un sandwich,a sandwich,word
 non,no,word
 monsieur,sir,word
 ou,or,word
-parfait / parfaite,perfect (masculine / feminine),word
+parfait / parfaite,perfect,word
 au revoir,goodbye,phrase
-enchanté / enchantée,nice to meet you (masculine / feminine),word
+enchanté / enchantée,nice to meet you,word
 ça va ? / ça va,"how are you?, i am fine",phrase
 bien,well / good (adverb),word
 je m'appelle,"my name is, i am called",phrase
@@ -57,7 +57,6 @@ tu viens d'où ?,where are you from?,sentence
 tu viens de,you are from,phrase
 un frère,a brother,word
 oh,oh,word
-tu as,you have,phrase
 un fils,a son,word
 une sœur,a sister,word
 une fille,a daughter,word
@@ -70,13 +69,13 @@ une nièce,a niece,word
 un neveu,a nephew,word
 il habite,he lives,phrase
 il vient,he comes,phrase
-amusant / amusante,"funny, entertaining (masculine / feminine)",word
-méchant / méchante,mean (masculine / feminine),word
+amusant / amusante,"funny, entertaining",word
+méchant / méchante,mean,word
 bien sûr,of course,phrase
 ma sœur,my sister,phrase
 ma nièce,my niece,phrase
 très,very,word
-intéressant / intéressante,interesting (masculine / feminine),word
+intéressant / intéressante,interesting,word
 toujours,always,word
 ma tante,my aunt,phrase
 mon fils,my son,phrase
@@ -96,5 +95,37 @@ nous avons,we have (formal),phrase
 vous avez,you have (plural / formal),phrase
 "ils / elles ont (""zohn"")",they have,phrase
 une baguette,a baguette,word
-musclé / muscleé,muscular,word
+musclé / musclée,muscular,word
 trop,too / so / super (informal),word
+mignon / mignonne,cute,word
+"Bonjour Madame, je voudrais un thé.","Hello Madam, I would like a tea.",sentence
+"Un croissant, s'il vous plaît.","A croissant, please.",sentence
+"Oui, je voudrais un café et un croissant.","Yes, I would like a coffee and a croissant.",sentence
+"Bonjour Monsieur, je voudrais un sandwich.","Hello Sir, I would like a sandwich.",sentence
+"Merci, au revoir !","Thank you, goodbye!",sentence
+Un café et un thé.,A coffee and a tea.,sentence
+Un croissant ou un éclair ?,A croissant or an éclair?,sentence
+"Bonjour, je m'appelle Marie, et toi ?","Hello, my name is Marie, and you?",sentence
+Je viens de New York.,I am from New York.,sentence
+"Bonjour Léo, tu viens d'où ?","Hello Léo, where are you from?",sentence
+"Au revoir, à bientôt !","Goodbye, see you soon!",sentence
+"Oui, je viens de Paris, et toi ?","Yes, I am from Paris, and you?",sentence
+J'ai une fille.,I have a daughter.,sentence
+Elle vient de Paris ou de Lyon ?,Is she from Paris or Lyon?,sentence
+"Oui, j'ai une sœur.","Yes, I have a sister.",sentence
+J'ai un frère et une sœur.,I have a brother and a sister.,sentence
+Tu as un neveu ou une nièce ?,Do you have a nephew or a niece?,sentence
+Il habite à Paris.,He lives in Paris.,sentence
+Il est amusant.,He is funny.,sentence
+"Oui, Lisa est très intéressante.","Yes, Lisa is very interesting.",sentence
+Paul est méchant ?,Is Paul mean?,sentence
+J'ai un frère et il est amusant.,I have a brother and he is funny.,sentence
+Elle est amusante ou méchante ?,Is she funny or mean?,sentence
+qui,who,word
+que,what,word
+quand,when,word
+comment,how,word
+pourquoi,why,word
+combien,how much / how many,word
+où,where,word
+est-ce que,question marker,phrase
