@@ -21,16 +21,10 @@ export interface ResolveDuplicatesResult {
 
 export type DuplicateDecision = 'keep' | 'overwrite';
 
-/**
- * Normalizes text for accent- and case-insensitive matching.
- */
 export function normalizeWord(str: string): string {
   if (!str) return '';
-  return str
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
+  // Normalizes Unicode to standard composed characters (NFC) without stripping accents or altering casing
+  return str.normalize('NFC').trim();
 }
 
 /**
