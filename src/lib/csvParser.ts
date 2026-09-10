@@ -127,10 +127,10 @@ export function convertRowsToFlashcards(
     const now = Date.now();
     cards.push({
       id: `custom-${now}-${Math.random().toString(36).slice(2, 7)}`,
-      front: front.toLowerCase(),
-      back: back.toLowerCase(),
+      front: front,
+      back: back,
       tags: parsedTags && parsedTags.length > 0 ? parsedTags : undefined,
-      example: example ? example.toLowerCase() : undefined,
+      example: example,
       lang: defaultLang,
       createdAt: now,
       modifiedAt: now,

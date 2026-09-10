@@ -23,81 +23,13 @@ export function getSettingsStorageKey(userId: string): string {
   return `bleuolingo_settings_user_${userId}`;
 }
 
-/**
- * Ensures all text on a flashcard is cleanly lowercased
- */
-export function lowercaseCard(card: Flashcard): Flashcard {
-  const fallbackCreated = card.createdAt || (card.due ? Math.min(card.due, Date.now() - 86400000 * 2) : Date.now() - 86400000 * 2);
-  const fallbackModified = card.modifiedAt || card.lastReview || fallbackCreated;
-
+export function ensureCardTimestamps(card: Flashcard): Flashcard {
+  const now = Date.now();
   return {
     ...card,
-    front: card.front ? card.front.toLowerCase() : '',
-    back: card.back ? card.back.toLowerCase() : '',
-    example: card.example ? card.example.toLowerCase() : card.example,
-    exampleTranslation: card.exampleTranslation
-      ? card.exampleTranslation.toLowerCase()
-      : card.exampleTranslation,
-    targetWord: card.targetWord ? card.targetWord.toLowerCase() : card.targetWord,
-    createdAt: card.createdAt || fallbackCreated,
-    modifiedAt: card.modifiedAt || fallbackModified,
+    createdAt: card.createdAt || now,
+    modifiedAt: card.modifiedAt || now,
   };
-}
-
-/**
- * Migrates and lowercases all existing cards across all user profiles in storage
- */
-export function lowercaseAllExistingCardsForAllProfiles(profiles: UserProfile[]): void {
-  if (typeof window === 'undefined') return;
-
-  // Migrate legacy key if present
-  try {
-    const legacy = localStorage.getItem(LEGACY_CARDS_KEY);
-    if (legacy) {
-      const parsed = JSON.parse(legacy);
-      if (Array.isArray(parsed)) {
-        localStorage.setItem(LEGACY_CARDS_KEY, JSON.stringify(parsed.map(lowercaseCard)));
-      }
-    }
-  } catch {
-    // Ignore error
-  }
-
-  // Lowercase cards for each registered profile
-  for (const profile of profiles) {
-    try {
-      const key = getCardStorageKey(profile.id);
-      const raw = localStorage.getItem(key);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          const lowercased = parsed.map(lowercaseCard);
-          localStorage.setItem(key, JSON.stringify(lowercased));
-        }
-      }
-    } catch {
-      // Ignore error
-    }
-  }
-
-  // Also sweep any other existing user cards in localStorage
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const storageKey = localStorage.key(i);
-      if (storageKey && storageKey.startsWith('bleuolingo_cards_user_')) {
-        const raw = localStorage.getItem(storageKey);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            const lowercased = parsed.map(lowercaseCard);
-            localStorage.setItem(storageKey, JSON.stringify(lowercased));
-          }
-        }
-      }
-    }
-  } catch {
-    // Ignore error
-  }
 }
 
 /**
@@ -160,9 +92,6 @@ export function getInitialProfiles(): { profiles: UserProfile[]; activeUserId: s
     localStorage.setItem(ACTIVE_USER_KEY, activeId);
   }
 
-  // Automatically lowercase all existing cards for all profiles
-  lowercaseAllExistingCardsForAllProfiles(profiles);
-
   return { profiles, activeUserId: activeId };
 }
 
@@ -187,19 +116,19 @@ export function saveActiveUserId(userId: string): void {
  * If user has no saved cards, initializes with STARTER_DECK.
  */
 export function loadUserCards(userId: string): Flashcard[] {
-  if (typeof window === 'undefined') return STARTER_DECK.map(lowercaseCard);
+  if (typeof window === 'undefined') return STARTER_DECK;
   try {
     const raw = localStorage.getItem(getCardStorageKey(userId));
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map(lowercaseCard);
+        return parsed;
       }
     }
   } catch {
     // Ignore parse error
   }
-  return STARTER_DECK.map(lowercaseCard);
+  return STARTER_DECK;
 }
 
 /**
@@ -208,8 +137,7 @@ export function loadUserCards(userId: string): Flashcard[] {
 export function saveUserCards(userId: string, cards: Flashcard[]): void {
   if (typeof window === 'undefined') return;
   try {
-    const lowercasedCards = cards.map(lowercaseCard);
-    localStorage.setItem(getCardStorageKey(userId), JSON.stringify(lowercasedCards));
+    localStorage.setItem(getCardStorageKey(userId), JSON.stringify(cards));
   } catch {
     // Ignore storage quota error
   }

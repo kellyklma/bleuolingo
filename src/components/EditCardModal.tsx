@@ -51,8 +51,8 @@ export const EditCardModal: React.FC<EditCardModalProps> = ({
 
     const updated: Flashcard = {
       ...card,
-      front: front.trim().toLowerCase(),
-      back: back.trim().toLowerCase(),
+      front: front.trim(),
+      back: back.trim(),
       tags: parsed.length > 0 ? parsed : undefined,
       modifiedAt: Date.now(),
     };

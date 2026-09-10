@@ -55,8 +55,8 @@ export const AddCardModal: React.FC<AddCardModalProps> = ({
     const now = Date.now();
     const newCard: Flashcard = {
       id: `card-${now}`,
-      front: trimmedFront.toLowerCase(),
-      back: trimmedBack.toLowerCase(),
+      front: trimmedFront,
+      back: trimmedBack,
       tags: parsedTags.length > 0 ? parsedTags : undefined,
       lang: 'fr-FR',
       createdAt: now,

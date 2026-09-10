@@ -19,7 +19,7 @@ import {
   createUserProfile,
   deleteUserProfile,
   renameUserProfile,
-  lowercaseCard,
+  ensureCardTimestamps,
 } from './lib/userStorage';
 import { loadActivityLog, recordReviewActivity, ActivityLog, formatDateKey } from './lib/activityStorage';
 import { User } from 'firebase/auth';
@@ -266,7 +266,7 @@ export default function App() {
           if (cloudCards && cloudCards.length > 0) {
             setCards(cloudCards);
           } else {
-            const initialDeck = cards.length > 0 ? cards : STARTER_DECK.map(lowercaseCard);
+            const initialDeck = cards.length > 0 ? cards : STARTER_DECK.map(ensureCardTimestamps);
             await saveUserCardsFirestore(user.uid, initialDeck);
             setCards(initialDeck);
           }
@@ -494,29 +494,27 @@ export default function App() {
   };
 
   const handleAddSingleCard = (newCard: Flashcard) => {
-    setCards((prev) => [lowercaseCard(newCard), ...prev]);
+    setCards((prev) => [ensureCardTimestamps(newCard), ...prev]);
   };
 
   const handleAddCards = (newCardsToAdd: Flashcard[]) => {
     if (newCardsToAdd.length === 0) return;
-    const formatted = newCardsToAdd.map(lowercaseCard);
-    setCards((prev) => [...prev, ...formatted]);
+    setCards((prev) => [...prev, ...newCardsToAdd]);
     setIsFlipped(false);
-    setActiveCardId(null);
   };
 
   const handleApplyImport = (cardsToAdd: Flashcard[], cardsToUpdate: Flashcard[]) => {
     setCards((prev) => {
-      const updateMap = new Map(cardsToUpdate.map((c) => [c.id, lowercaseCard(c)]));
+      const updateMap = new Map(cardsToUpdate.map((c) => [c.id, ensureCardTimestamps(c)]));
       const updatedExisting = prev.map((c) => updateMap.get(c.id) || c);
-      return [...updatedExisting, ...cardsToAdd.map(lowercaseCard)];
+      return [...updatedExisting, ...cardsToAdd.map(ensureCardTimestamps)];
     });
     setIsFlipped(false);
     setActiveCardId(null);
   };
 
   const handleUpdateCard = (updatedCard: Flashcard) => {
-    const formatted = lowercaseCard(updatedCard);
+    const formatted = ensureCardTimestamps(updatedCard);
     setCards((prev) => prev.map((c) => (c.id === formatted.id ? formatted : c)));
   };
 
@@ -530,7 +528,7 @@ export default function App() {
   };
 
   const handleResetToDefault = () => {
-    const defaultDeck = STARTER_DECK.map(lowercaseCard);
+    const defaultDeck = STARTER_DECK.map(ensureCardTimestamps);
     setCards(defaultDeck);
     clearTodayNewCards(effectiveUserId);
     setNewCardsIntroducedToday(0);
@@ -561,7 +559,7 @@ export default function App() {
       profiles: [...profiles, newProfile],
       activeUserId: newProfile.id,
     });
-    setCards(STARTER_DECK.map(lowercaseCard));
+    setCards(STARTER_DECK.map(ensureCardTimestamps));
     setActivityLog(loadActivityLog(newProfile.id));
     resetActiveStudyState();
   };

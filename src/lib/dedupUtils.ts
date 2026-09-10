@@ -24,7 +24,7 @@ export type DuplicateDecision = 'keep' | 'overwrite';
 export function normalizeWord(str: string): string {
   if (!str) return '';
   // Normalizes Unicode to standard composed characters (NFC) without stripping accents or altering casing
-  return str.normalize('NFC').trim();
+  return str.normalize('NFC').toLowerCase().trim();
 }
 
 /**
@@ -66,8 +66,8 @@ export function analyzeCardsForDuplicates(
       (normBack ? existingByBack.get(normBack) : undefined);
 
     if (existing) {
-      const frontDiff = normalizeWord(existing.front) !== normalizeWord(incoming.front);
-      const backDiff = normalizeWord(existing.back) !== normalizeWord(incoming.back);
+      const frontDiff = existing.front.trim() !== incoming.front.trim();
+      const backDiff = existing.back.trim() !== incoming.back.trim();
 
       const existingTags = (existing.tags || []).map((t) => t.trim().toLowerCase()).sort().join(',');
       const incomingTags = (incoming.tags || []).map((t) => t.trim().toLowerCase()).sort().join(',');
